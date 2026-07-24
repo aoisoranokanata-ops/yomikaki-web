@@ -1,0 +1,3341 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>📚 yomikaki web — 読書・執筆 総合管理</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#3f7fbf">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="yomikaki">
+<style>
+/* ============================================================ テーマ */
+:root {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --text: #1c1e21;
+  --muted: #71767c;
+  --border: #d8dbe0;
+  --accent: #3f7fbf;
+  --accent-text: #ffffff;
+  --danger: #c0392b;
+  --star: #e8a200;
+  --row-hover: #eef3f9;
+  --row-selected: #dce9f7;
+}
+/* ダーク配色（OS設定に追従。data-theme で明示切替も可能） */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #23252a;
+    --panel: #2d3036;
+    --text: #e6e6e6;
+    --muted: #9aa0a6;
+    --border: #45484f;
+    --accent: #5b9bd5;
+    --accent-text: #ffffff;
+    --danger: #e07060;
+    --star: #f0b429;
+    --row-hover: #353a42;
+    --row-selected: #3a4a5c;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #23252a;
+  --panel: #2d3036;
+  --text: #e6e6e6;
+  --muted: #9aa0a6;
+  --border: #45484f;
+  --accent: #5b9bd5;
+  --accent-text: #ffffff;
+  --danger: #e07060;
+  --star: #f0b429;
+  --row-hover: #353a42;
+  --row-selected: #3a4a5c;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font-family: "Yu Gothic UI", "Meiryo", system-ui, sans-serif;
+  font-size: 14px;
+}
+button {
+  font: inherit; color: var(--text); background: var(--panel);
+  border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 12px; cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--row-hover); }
+button:disabled { opacity: .45; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button.danger-2 { color: var(--danger); border-color: var(--danger); }
+input, select, textarea {
+  font: inherit; color: var(--text); background: var(--panel);
+  border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px;
+  width: 100%;
+}
+textarea { resize: vertical; }
+h1 { font-size: 16px; margin: 0; }
+h2 { font-size: 15px; margin: 0 0 10px; }
+
+/* ============================================================ レイアウト */
+header {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 12px; background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 10;
+}
+header .spacer { flex: 1; }
+.mode-toggle button { border-radius: 0; }
+.mode-toggle button:first-child { border-radius: 6px 0 0 6px; }
+.mode-toggle button:last-child { border-radius: 0 6px 6px 0; margin-left: -1px; }
+.mode-toggle button.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+
+main { display: flex; gap: 12px; padding: 12px; align-items: flex-start; }
+.pane {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 12px;
+}
+#list-pane { flex: 11; min-width: 0; }
+#detail-pane { flex: 9; min-width: 0; }
+@media (max-width: 860px) {
+  main { flex-direction: column; }
+  #list-pane, #detail-pane { width: 100%; }
+}
+
+/* ============================================================ 一覧 */
+.filters { display: flex; gap: 8px; margin: 8px 0; flex-wrap: wrap; }
+.filters select { width: auto; flex: 1; min-width: 110px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td {
+  text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;
+}
+th { color: var(--muted); font-weight: normal; font-size: 12px; }
+th[data-sort] { cursor: pointer; }
+th[data-sort]:hover { color: var(--text); }
+tbody tr { cursor: pointer; }
+tbody tr:hover { background: var(--row-hover); }
+tbody tr.selected { background: var(--row-selected); }
+td.star-cell { color: var(--star); }
+.list-actions { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
+.count-label { margin-left: auto; color: var(--muted); font-size: 12px; }
+
+/* ============================================================ タブ */
+.tabs { display: flex; gap: 0; margin-bottom: 12px; flex-wrap: wrap; }
+.tabs button {
+  border-radius: 0; border-bottom-width: 2px; background: transparent;
+  border-color: transparent transparent var(--border) transparent;
+  padding: 6px 10px;
+}
+.tabs button.active {
+  border-bottom-color: var(--accent); color: var(--accent); font-weight: bold;
+}
+.tab-body { display: none; }
+.tab-body.active { display: block; }
+
+/* ============================================================ フォーム */
+.form-row { margin-bottom: 10px; }
+.form-row label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 3px; }
+.form-grid { display: flex; gap: 8px; }
+.form-grid > div { flex: 1; }
+.star-line { display: flex; align-items: center; gap: 10px; }
+.star-line input { width: 80px; }
+.star-display { color: var(--star); font-size: 16px; }
+.form-actions { display: flex; gap: 8px; margin-top: 12px; }
+.placeholder { color: var(--muted); text-align: center; padding: 60px 20px; }
+
+/* ============================================================ サブリスト */
+ul.itemlist {
+  list-style: none; margin: 0 0 8px; padding: 0;
+  max-height: 150px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 6px;
+}
+ul.itemlist:empty::after {
+  content: "（まだありません）"; display: block;
+  color: var(--muted); padding: 10px; font-size: 12px;
+}
+ul.itemlist li {
+  padding: 6px 8px; border-bottom: 1px solid var(--border);
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 13px;
+}
+ul.itemlist li:last-child { border-bottom: none; }
+ul.itemlist li:hover { background: var(--row-hover); }
+ul.itemlist li.selected { background: var(--row-selected); }
+.item-view {
+  border: 1px solid var(--border); border-radius: 6px; padding: 8px;
+  min-height: 60px; max-height: 160px; overflow-y: auto;
+  white-space: pre-wrap; font-size: 13px; margin-bottom: 8px;
+  color: var(--text);
+}
+.item-view:empty::after { content: "一覧を選択すると内容を表示します"; color: var(--muted); font-size: 12px; }
+.subrow { display: flex; gap: 8px; margin-bottom: 8px; }
+.subrow > * { flex: 1; }
+.subrow > .narrow { flex: 0 0 110px; }
+.bm-current { font-weight: bold; margin-bottom: 8px; }
+
+/* ============================================================ 読者サブタブ */
+#view-reader { display: block; }
+.reader-tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.reader-tabs button.active {
+  background: var(--accent); color: var(--accent-text); border-color: var(--accent);
+}
+.rtab { display: none; }
+.rtab.active { display: flex; gap: 12px; align-items: flex-start; }
+@media (max-width: 860px) {
+  .rtab.active { flex-direction: column; }
+  .rtab.active > .pane { width: 100%; }
+}
+
+/* ============================================================ カレンダー */
+.cal-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-grid .dow { text-align: center; color: var(--muted); font-size: 11px; padding: 2px; }
+.cal-cell {
+  border: 1px solid var(--border); border-radius: 6px; min-height: 52px;
+  padding: 3px 5px; cursor: pointer; position: relative; font-size: 12px;
+  background: var(--panel);
+}
+.cal-cell:hover { background: var(--row-hover); }
+.cal-cell.other { opacity: .35; }
+.cal-cell.today { outline: 2px solid var(--accent); }
+.cal-cell.selected { background: var(--row-selected); }
+.cal-cell.finished { background: rgba(46, 160, 67, .20); }
+.cal-cell.finished.selected { background: rgba(46, 160, 67, .38); }
+.cal-dot {
+  position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+  width: 7px; height: 7px; border-radius: 50%;
+}
+.cal-dot.pending { background: #2a6edd; }
+.cal-dot.done { background: #999999; }
+.legend { color: var(--muted); font-size: 11px; margin-top: 6px; }
+.sched-item {
+  display: flex; align-items: center; gap: 6px; padding: 5px 6px;
+  border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.sched-item input[type=checkbox] { width: auto; }
+.sched-item .x {
+  margin-left: auto; border: none; background: none;
+  color: var(--danger); cursor: pointer; padding: 2px 6px;
+}
+.plan-item { padding: 4px 2px; font-size: 13px; }
+.plan-empty { color: var(--muted); font-size: 12px; padding: 4px 2px; }
+
+/* ============================================================ 作者モード */
+#view-writer { align-items: stretch; }
+#w-works-pane { flex: 0 0 230px; min-width: 0; }
+#w-main-pane { flex: 1; min-width: 0; }
+@media (max-width: 860px) {
+  #w-works-pane, #w-main-pane { width: 100%; flex: auto; }
+}
+ul.itemlist.tall { max-height: 380px; }
+#ms-wrap { display: flex; gap: 10px; align-items: flex-start; }
+#ms-tree-pane { flex: 0 0 240px; min-width: 0; }
+#ms-editor-pane { flex: 1; min-width: 0; }
+@media (max-width: 860px) {
+  #ms-wrap { flex-direction: column; }
+  #ms-tree-pane, #ms-editor-pane { width: 100%; flex: auto; }
+}
+ul.mstree {
+  list-style: none; margin: 0 0 8px; padding: 0;
+  border: 1px solid var(--border); border-radius: 6px;
+  max-height: 320px; overflow-y: auto;
+}
+ul.mstree:empty::after {
+  content: "「章を追加」「話を追加」で構成を作りましょう"; display: block;
+  color: var(--muted); padding: 10px; font-size: 12px;
+}
+ul.mstree li {
+  padding: 6px 8px; cursor: pointer; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+ul.mstree li:last-child { border-bottom: none; }
+ul.mstree li.ep-child { padding-left: 24px; }
+ul.mstree li:hover { background: var(--row-hover); }
+ul.mstree li.selected { background: var(--row-selected); }
+.tree-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.tree-btns button { padding: 5px 8px; font-size: 12px; }
+.ms-status { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+.ms-status .count { font-weight: bold; font-size: 15px; }
+.ms-status .total { color: var(--muted); font-size: 12px; }
+.ms-status .savelabel { margin-left: auto; color: var(--muted); font-size: 12px; }
+#ms-editor {
+  width: 100%; min-height: 55vh; font-size: 15px; line-height: 1.9;
+  font-family: "Yu Gothic", "Meiryo", serif;
+}
+#w-toolbar { margin-bottom: 12px; }
+.ms-tools { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+.ms-tools button { padding: 5px 9px; font-size: 13px; }
+.ms-tools .sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 4px; }
+.ms-tools .grp-label { color: var(--muted); font-size: 12px; }
+.ms-hint { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+/* 縦書きプレビュー */
+.tategaki {
+  writing-mode: vertical-rl; text-orientation: upright;
+  font-family: "Yu Mincho", "Hiragino Mincho ProN", serif;
+  font-size: 17px; line-height: 2; letter-spacing: .05em;
+  max-height: 70vh; overflow-x: auto; overflow-y: hidden;
+  padding: 16px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--panel); white-space: pre-wrap;
+}
+.preview-count { font-weight: bold; margin-bottom: 8px; }
+.preview-body {
+  white-space: pre-wrap; border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; max-height: 66vh; overflow-y: auto; line-height: 1.8;
+  font-family: "Yu Gothic", serif;
+}
+dialog.wide { max-width: 900px; }
+
+/* ============================================================ 創作支援ビュー */
+.split { display: flex; gap: 10px; align-items: flex-start; }
+.split > .side { flex: 0 0 240px; min-width: 0; }
+.split > .body { flex: 1; min-width: 0; }
+@media (max-width: 860px) {
+  .split { flex-direction: column; }
+  .split > .side, .split > .body { width: 100%; flex: auto; }
+}
+.kishoten { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.ks-box label {
+  display: block; text-align: center; color: #fff; font-weight: bold;
+  border-radius: 4px; padding: 2px; margin-bottom: 3px; font-size: 13px;
+}
+.ks-box textarea { min-height: 80px; }
+.ks-ki label { background: #4a90d9; }
+.ks-sho label { background: #50a14f; }
+.ks-ten label { background: #e0a030; }
+.ks-ketsu label { background: #d05050; }
+.tl-table td { max-width: none; white-space: normal; }
+.tl-table td[contenteditable] { cursor: text; }
+.tl-table td[contenteditable]:focus { outline: 2px solid var(--accent); background: var(--panel); }
+.savelabel-inline { color: var(--muted); font-size: 12px; margin-left: 10px; }
+
+/* ============================================================ グラフ（相関図・分岐） */
+.graph-toolbar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; align-items: center; }
+.graph-toolbar .hint { margin-left: auto; }
+.graph-wrap {
+  border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  background: var(--bg); position: relative;
+}
+.graph-svg { display: block; width: 100%; height: 62vh; touch-action: none; cursor: grab; }
+.graph-svg.panning { cursor: grabbing; }
+.gnode { cursor: move; }
+.gnode rect { stroke-width: 1.5; }
+.gnode.selected rect { stroke: var(--star); stroke-width: 3; }
+.gnode text { fill: #fff; font-weight: bold; pointer-events: none; user-select: none; }
+.gnode text.sub { font-weight: normal; font-size: 11px; fill: rgba(255,255,255,.85); }
+.gedge { stroke: #909090; stroke-width: 2; fill: none; }
+.gedge.selected { stroke: var(--star); stroke-width: 3; }
+.gedge-hit { stroke: transparent; stroke-width: 14; fill: none; cursor: pointer; }
+.gedge-label {
+  font-size: 11px; fill: var(--text); pointer-events: none;
+  paint-order: stroke; stroke: var(--panel); stroke-width: 3px;
+}
+.graph-empty {
+  position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; color: var(--muted); text-align: center; padding: 20px;
+  font-size: 13px; pointer-events: none;
+}
+.branch-split { display: flex; gap: 10px; align-items: flex-start; }
+.branch-split > .graph-col { flex: 1; min-width: 0; }
+.branch-split > .note-col { flex: 0 0 260px; min-width: 0; }
+@media (max-width: 860px) {
+  .branch-split { flex-direction: column; }
+  .branch-split > .note-col { width: 100%; flex: auto; }
+}
+#branch-note { min-height: 40vh; }
+
+/* ============================================================ ダイアログ他 */
+dialog {
+  background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px;
+  max-width: 560px; width: 92vw; padding: 16px;
+}
+dialog::backdrop { background: rgba(0,0,0,.45); }
+dialog .form-actions { justify-content: flex-end; }
+.hint { color: var(--muted); font-size: 12px; }
+.warn { color: var(--danger); font-size: 12px; }
+#toast {
+  position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%);
+  background: var(--accent); color: var(--accent-text);
+  padding: 8px 18px; border-radius: 20px; opacity: 0;
+  transition: opacity .25s; pointer-events: none; z-index: 100;
+  max-width: 90vw;
+}
+#toast.show { opacity: 1; }
+footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📚 yomikaki</h1>
+  <div class="mode-toggle">
+    <button id="btn-mode-reader" class="active">📖 読者モード</button>
+    <button id="btn-mode-writer">✍️ 作者モード</button>
+  </div>
+  <div class="spacer"></div>
+  <button id="btn-theme" title="テーマ切替">🌓</button>
+  <button id="btn-export">📤 エクスポート</button>
+  <button id="btn-import">📥 インポート</button>
+</header>
+
+<!-- ================================================== 読者モード -->
+<main id="view-reader">
+  <div class="reader-tabs">
+    <button data-rtab="books" class="active">📚 作品リスト</button>
+    <button data-rtab="calendar">📅 読書カレンダー</button>
+    <button data-rtab="quotes">📝 引用・語彙帳</button>
+  </div>
+
+  <section class="rtab active" id="rtab-books">
+  <div class="pane" id="list-pane">
+    <input id="search" placeholder="🔍 タイトル・作者名・タグで検索">
+    <div class="filters">
+      <select id="f-source">
+        <option value="">サイト: すべて</option>
+        <option>なろう</option><option>カクヨム</option><option>その他</option>
+      </select>
+      <select id="f-genre"><option value="">ジャンル: すべて</option></select>
+      <select id="f-status">
+        <option value="">状態: すべて</option>
+        <option>読みたい</option><option>読書中</option><option>完読</option><option>中断</option>
+      </select>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th data-sort="title">タイトル</th><th data-sort="author">作者</th>
+          <th data-sort="genre">ジャンル</th><th data-sort="star_rating">★</th>
+          <th data-sort="status">状態</th><th>しおり</th>
+          <th data-sort="updated_at">更新日</th>
+        </tr></thead>
+        <tbody id="book-rows"></tbody>
+      </table>
+    </div>
+    <div class="list-actions">
+      <button id="btn-new" class="primary">＋ 新規追加</button>
+      <button id="btn-reader-claude">🤖 Claudeに送る</button>
+      <span class="count-label" id="count-label"></span>
+    </div>
+  </div>
+
+  <div class="pane" id="detail-pane">
+    <h2 id="form-title">新規作品の登録</h2>
+    <div class="tabs" id="detail-tabs">
+      <button data-tab="basic" class="active">基本情報</button>
+      <button data-tab="text">あらすじ・要約</button>
+      <button data-tab="imp" disabled>感想</button>
+      <button data-tab="bm" disabled>しおり</button>
+      <button data-tab="quote" disabled>引用・語彙</button>
+    </div>
+
+    <!-- 基本情報 -->
+    <div class="tab-body active" id="tab-basic">
+      <div class="form-row"><label>タイトル *</label><input id="in-title"></div>
+      <div class="form-row"><label>作者名</label><input id="in-author"></div>
+      <div class="form-grid">
+        <div class="form-row"><label>投稿サイト</label>
+          <select id="in-source"><option>なろう</option><option>カクヨム</option><option>その他</option></select>
+        </div>
+        <div class="form-row"><label>ステータス</label>
+          <select id="in-status"><option>読みたい</option><option>読書中</option><option>完読</option><option>中断</option></select>
+        </div>
+      </div>
+      <div class="form-row"><label>作品URL</label><input id="in-url" placeholder="※URL自動取得はexe版のみ（CORS制約）"></div>
+      <div class="form-row"><label>ジャンル（サイトのプリセットから選択 or 自由入力）</label>
+        <input id="in-genre" list="genre-list"><datalist id="genre-list"></datalist>
+      </div>
+      <div class="form-row"><label>タグ（カンマ区切り。例: 主人公最強, ざまぁ）</label><input id="in-tags"></div>
+      <div class="form-row"><label>星評価（0.5刻み）</label>
+        <div class="star-line">
+          <input id="in-star" type="number" min="0" max="5" step="0.5" value="0">
+          <span class="star-display" id="star-display">☆☆☆☆☆</span>
+        </div>
+      </div>
+      <div class="form-row"><label>完読日</label><span id="finished-label">—</span></div>
+    </div>
+
+    <!-- あらすじ・要約 -->
+    <div class="tab-body" id="tab-text">
+      <div class="form-row"><label>あらすじ（作品の公式あらすじ）</label><textarea id="in-synopsis" rows="7"></textarea></div>
+      <div class="form-row"><label>要約（自分でまとめる読書メモ）</label><textarea id="in-summary" rows="7"></textarea></div>
+    </div>
+
+    <!-- 感想 -->
+    <div class="tab-body" id="tab-imp">
+      <label class="hint">感想の履歴（新しい順）</label>
+      <ul class="itemlist" id="imp-list"></ul>
+      <div class="item-view" id="imp-view"></div>
+      <textarea id="imp-input" rows="3" placeholder="新しい感想を書く（追記履歴として残ります）"></textarea>
+      <div class="form-actions">
+        <button id="btn-imp-add" class="primary">✏️ 追記として保存</button>
+        <button id="btn-imp-del" class="danger-2">選択を削除</button>
+      </div>
+    </div>
+
+    <!-- しおり -->
+    <div class="tab-body" id="tab-bm">
+      <div class="bm-current" id="bm-current">しおりはまだありません</div>
+      <div class="subrow">
+        <input id="bm-episode" type="number" min="0" class="narrow" placeholder="話数">
+        <input id="bm-note" placeholder="メモ（どの場面か・位置など）">
+      </div>
+      <div class="form-actions">
+        <button id="btn-bm-add" class="primary">🔖 しおりを更新</button>
+        <button id="btn-bm-del" class="danger-2">選択を削除</button>
+      </div>
+      <label class="hint">しおりの履歴</label>
+      <ul class="itemlist" id="bm-list"></ul>
+    </div>
+
+    <!-- 引用・語彙 -->
+    <div class="tab-body" id="tab-quote">
+      <label class="hint">記録した引用・語彙（新しい順）</label>
+      <ul class="itemlist" id="quote-list"></ul>
+      <div class="item-view" id="quote-view"></div>
+      <div class="subrow">
+        <input id="quote-category" class="narrow" list="quote-cat-list" placeholder="分類">
+        <datalist id="quote-cat-list">
+          <option>一文</option><option>比喩</option><option>語彙</option>
+          <option>セリフ</option><option>描写</option><option>その他</option>
+        </datalist>
+        <input id="quote-note" placeholder="メモ（任意。例: 戦闘描写の緩急が上手い）">
+      </div>
+      <textarea id="quote-input" rows="3" placeholder="参考になった一文・比喩表現・語彙をここに貼り付け"></textarea>
+      <div class="form-actions">
+        <button id="btn-quote-add" class="primary">＋ 記録する</button>
+        <button id="btn-quote-copy">📋 選択をコピー</button>
+        <button id="btn-quote-del" class="danger-2">選択を削除</button>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button id="btn-save" class="primary">💾 保存</button>
+      <button id="btn-delete" class="danger-2" hidden>🗑 削除</button>
+    </div>
+  </div>
+  </section>
+
+  <!-- ================================ 読書カレンダー -->
+  <section class="rtab" id="rtab-calendar">
+    <div class="pane" style="flex:11; min-width:0">
+      <div class="cal-head">
+        <button id="cal-prev">◀</button>
+        <strong id="cal-title"></strong>
+        <button id="cal-next">▶</button>
+        <button id="cal-today-btn">今日</button>
+      </div>
+      <div class="cal-grid" id="cal-grid"></div>
+      <div class="legend">● 予定あり（青＝未完了 / 灰＝全て完了）　■ 完読した日（緑）</div>
+      <h2 id="day-title" style="margin-top:14px"></h2>
+      <div id="day-scheds"></div>
+      <div class="subrow" style="margin-top:8px">
+        <select id="sched-book"></select>
+        <input id="sched-note" placeholder="メモ（任意。例: 3話まで読む）">
+      </div>
+      <div class="form-actions">
+        <button id="btn-sched-add" class="primary">＋ この日に予定を追加</button>
+      </div>
+    </div>
+    <div class="pane" style="flex:9; min-width:0">
+      <h2>📖 今日読む予定</h2>
+      <div id="today-list"></div>
+      <h2 style="margin-top:16px">🗓 今週の予定（月〜日）</h2>
+      <div id="week-list"></div>
+    </div>
+  </section>
+
+  <!-- ================================ 引用・語彙帳（横断検索） -->
+  <section class="rtab" id="rtab-quotes">
+    <div class="pane" style="flex:1; min-width:0">
+      <div class="subrow">
+        <input id="q-search" placeholder="🔍 引用・メモ・作品名で横断検索">
+        <select id="q-category" class="narrow"><option value="">分類: すべて</option></select>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>日時</th><th>分類</th><th>引用</th><th>作品</th></tr></thead>
+          <tbody id="q-rows"></tbody>
+        </table>
+      </div>
+      <div class="item-view" id="q-view" style="margin-top:8px"></div>
+      <div class="form-actions">
+        <button id="btn-q-copy">📋 引用をコピー</button>
+        <button id="btn-q-del" class="danger-2">🗑 削除</button>
+        <span class="count-label" id="q-count"></span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- ================================================== 作者モード -->
+<main id="view-writer" hidden>
+  <div class="pane" id="w-works-pane">
+    <h2>自作品</h2>
+    <ul class="itemlist tall" id="works-list"></ul>
+    <div class="form-actions">
+      <button id="btn-work-add" class="primary">＋ 新規作品</button>
+      <button id="btn-work-del" class="danger-2">🗑 削除</button>
+    </div>
+  </div>
+
+  <div class="pane" id="w-main-pane">
+    <div class="tabs" id="w-toolbar">
+      <button data-wview="info">ℹ️ 作品情報</button>
+      <button data-wview="ms" class="active">📝 執筆原稿</button>
+      <button data-wview="plot">📋 プロット</button>
+      <button data-wview="relation">🕸 相関図</button>
+      <button data-wview="chars">👥 登場人物</button>
+      <button data-wview="world">🌍 世界観</button>
+      <button data-wview="timeline">⏳ 時系列</button>
+      <button data-wview="refs">📚 参考資料</button>
+      <button data-wview="branch">🌳 作品分析</button>
+      <button id="btn-writer-claude" style="margin-left:auto">🤖 Claudeに送る</button>
+    </div>
+
+    <div id="wv-hint" class="placeholder">
+      左のリストで自作品を選ぶか、「＋ 新規作品」で作成してください。
+    </div>
+
+    <!-- 作品情報 -->
+    <div id="wv-info" hidden>
+      <div class="form-row"><label>タイトル *</label><input id="w-title"></div>
+      <div class="form-row"><label>ジャンル</label><input id="w-genre" placeholder="例: 異世界ファンタジー"></div>
+      <div class="form-row"><label>あらすじ</label><textarea id="w-synopsis" rows="6" placeholder="作品のあらすじ・コンセプトなど"></textarea></div>
+      <div class="form-row"><label>執筆状況</label><span id="w-stats" class="hint"></span></div>
+      <div class="form-actions"><button id="btn-w-save" class="primary">💾 保存</button></div>
+    </div>
+
+    <!-- 執筆原稿 -->
+    <div id="wv-ms" hidden>
+      <div id="ms-wrap">
+        <div id="ms-tree-pane">
+          <label class="hint">章立て（章と話）</label>
+          <ul class="mstree" id="ms-tree"></ul>
+          <div class="tree-btns">
+            <button id="btn-ch-add">📂 章を追加</button>
+            <button id="btn-ep-add">📄 話を追加</button>
+            <button id="btn-node-rename">名称変更</button>
+            <button id="btn-node-del" class="danger-2">削除</button>
+            <button id="btn-node-up">↑</button>
+            <button id="btn-node-down">↓</button>
+          </div>
+        </div>
+        <div id="ms-editor-pane">
+          <div class="ms-status">
+            <span class="count" id="ms-count">— 字</span>
+            <span class="total" id="ms-total"></span>
+            <span class="savelabel" id="ms-save-label"></span>
+          </div>
+          <textarea id="ms-editor" disabled
+            placeholder="左のツリーで「話」を選ぶと執筆できます。&#10;ルビはカクヨム記法（漢字《ふりがな》、区切りは｜）のまま書けます。"></textarea>
+          <div class="ms-tools">
+            <button data-insert="「」" data-back="1">「」(F1)</button>
+            <button data-insert="……" data-back="0">……(F2)</button>
+            <button data-insert="――" data-back="0">――(F3)</button>
+            <button data-insert="　" data-back="0">　字下げ(F4)</button>
+            <span class="sep"></span>
+            <button id="btn-ms-ruby">ルビ(F5)</button>
+            <button id="btn-ms-boten">傍点(F6)</button>
+            <span class="sep"></span>
+            <button id="btn-ms-register">📚 選択を登録 ▾</button>
+          </div>
+          <div class="ms-tools">
+            <button id="btn-ms-vprev">👁 縦書きプレビュー</button>
+            <button id="btn-ms-cprev">📖 章・全体プレビュー</button>
+            <span class="sep"></span>
+            <button id="btn-ms-copy-ep">📋 この話をコピー</button>
+            <button id="btn-ms-copy-ch">📋 章をコピー</button>
+            <button id="btn-ms-copy-all">📋 作品全体をコピー</button>
+          </div>
+          <div class="ms-tools">
+            <span class="grp-label">↕ 行間:</span>
+            <button data-spacing="1">改行なし</button>
+            <button data-spacing="2">2改行</button>
+            <button data-spacing="3">3改行</button>
+            <label style="display:flex;align-items:center;gap:4px;width:auto">
+              <input type="checkbox" id="ms-indent" style="width:auto"> 地の文を字下げ
+            </label>
+            <span class="ms-hint">選択範囲（なければ全文）に適用・Ctrl+Zで戻せます</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- プロット -->
+    <div id="wv-plot" hidden>
+      <div class="form-row" style="margin-bottom:4px">
+        <label>自由プロット（構想・メモを自由に）<span class="savelabel-inline" id="plot-save-label"></span></label>
+        <textarea id="plot-body" rows="6" placeholder="物語の全体構想、伏線メモ、テーマなど"></textarea>
+      </div>
+      <div class="kishoten">
+        <div class="ks-box ks-ki"><label>起</label><textarea id="plot-ki" placeholder="「起」の構成メモ"></textarea></div>
+        <div class="ks-box ks-sho"><label>承</label><textarea id="plot-sho" placeholder="「承」の構成メモ"></textarea></div>
+        <div class="ks-box ks-ten"><label>転</label><textarea id="plot-ten" placeholder="「転」の構成メモ"></textarea></div>
+        <div class="ks-box ks-ketsu"><label>結</label><textarea id="plot-ketsu" placeholder="「結」の構成メモ"></textarea></div>
+      </div>
+    </div>
+
+    <!-- 登場人物 -->
+    <div id="wv-chars" hidden>
+      <div class="split">
+        <div class="side">
+          <label class="hint">登場人物</label>
+          <ul class="itemlist tall" id="char-list"></ul>
+          <div class="form-actions">
+            <button id="btn-char-add" class="primary">＋ 追加</button>
+            <button id="btn-char-del" class="danger-2">🗑 削除</button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="form-row"><label>名前 *</label><input id="char-name"></div>
+          <div class="form-row"><label>役割</label>
+            <input id="char-role" list="role-list">
+            <datalist id="role-list">
+              <option>主人公</option><option>ヒロイン</option><option>敵役</option>
+              <option>ライバル</option><option>相棒</option><option>脇役</option><option>その他</option>
+            </datalist>
+          </div>
+          <div class="form-grid">
+            <div class="form-row"><label>年齢</label><input id="char-age"></div>
+            <div class="form-row"><label>口調・一人称</label><input id="char-speech"></div>
+          </div>
+          <div class="form-row"><label>容姿</label><textarea id="char-appearance" rows="2"></textarea></div>
+          <div class="form-row"><label>性格</label><textarea id="char-personality" rows="2"></textarea></div>
+          <div class="form-row"><label>背景設定</label><textarea id="char-background" rows="3"></textarea></div>
+          <div class="form-row"><label>備考</label><textarea id="char-notes" rows="2"></textarea></div>
+          <div class="form-actions"><button id="btn-char-save" class="primary">💾 保存</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 世界観 -->
+    <div id="wv-world" hidden>
+      <div class="split">
+        <div class="side">
+          <label class="hint">世界観（世界設定）</label>
+          <ul class="itemlist tall" id="world-list"></ul>
+          <div class="form-actions">
+            <button id="btn-world-add" class="primary">＋ 追加</button>
+            <button id="btn-world-del" class="danger-2">🗑 削除</button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="form-row"><label>タイトル *</label><input id="world-title"></div>
+          <div class="form-row"><label>カテゴリ</label>
+            <input id="world-category" list="world-cat-list">
+            <datalist id="world-cat-list">
+              <option>地理</option><option>歴史</option><option>用語</option><option>組織</option>
+              <option>種族</option><option>魔法・技術</option><option>文化</option><option>設定</option>
+            </datalist>
+          </div>
+          <div class="form-row"><label>本文（設定の内容）</label>
+            <textarea id="world-body" rows="8" placeholder="地名・組織・種族・魔法/技術体系・歴史・用語の説明など"></textarea>
+          </div>
+          <div class="form-actions"><button id="btn-world-save" class="primary">💾 保存</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 時系列 -->
+    <div id="wv-timeline" hidden>
+      <label class="hint">時系列（セルをクリックで直接編集できます）</label>
+      <div class="table-wrap">
+        <table class="tl-table">
+          <thead><tr><th style="width:24%">順序・日付</th><th>出来事</th><th style="width:22%">関連キャラ</th></tr></thead>
+          <tbody id="tl-rows"></tbody>
+        </table>
+      </div>
+      <div class="tree-btns" style="margin-top:8px">
+        <button id="btn-tl-add" class="primary">＋ 出来事を追加</button>
+        <button id="btn-tl-del" class="danger-2">🗑 削除</button>
+        <button id="btn-tl-up">↑</button>
+        <button id="btn-tl-down">↓</button>
+      </div>
+    </div>
+
+    <!-- 参考資料 -->
+    <div id="wv-refs" hidden>
+      <div class="split">
+        <div class="side">
+          <label class="hint">参考資料</label>
+          <ul class="itemlist tall" id="refs-list"></ul>
+          <div class="form-actions">
+            <button id="btn-refs-add" class="primary">＋ 追加</button>
+            <button id="btn-refs-del" class="danger-2">🗑 削除</button>
+          </div>
+        </div>
+        <div class="body">
+          <div class="form-row"><label>タイトル *</label><input id="refs-title"></div>
+          <div class="form-row"><label>タグ</label><input id="refs-tag" placeholder="カテゴリタグ（例: 世界観, 武器, 食文化）"></div>
+          <div class="form-row"><label>URL</label>
+            <div class="subrow">
+              <input id="refs-url" placeholder="参考URL（任意）">
+              <button id="btn-refs-open" class="narrow">🔗 開く</button>
+            </div>
+          </div>
+          <div class="form-row"><label>本文（メモ・引用など）</label><textarea id="refs-body" rows="7"></textarea></div>
+          <div class="form-actions"><button id="btn-refs-save" class="primary">💾 保存</button></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 相関図 -->
+    <div id="wv-relation" hidden>
+      <div class="graph-toolbar">
+        <button id="btn-rel-add" class="primary">＋ 関係を追加</button>
+        <button id="btn-rel-label">✏️ 関係ラベル変更</button>
+        <button id="btn-rel-del" class="danger-2">🗑 関係を削除</button>
+        <button id="btn-rel-fit">⛶ 全体表示</button>
+        <span class="hint">ノードはドラッグで移動／ホイールでズーム／線をクリックで選択</span>
+      </div>
+      <div class="graph-wrap">
+        <svg id="rel-svg" class="graph-svg"></svg>
+        <div class="graph-empty" id="rel-empty" hidden>
+          登場人物がいません。「👥 登場人物」で追加すると<br>ここにノードとして表示されます。
+        </div>
+      </div>
+    </div>
+
+    <!-- 作品分析（分岐マインドマップ） -->
+    <div id="wv-branch" hidden>
+      <div class="graph-toolbar">
+        <button id="btn-br-add-node" class="primary">＋ 分岐ノード追加</button>
+        <button id="btn-br-rename">✏️ ノード名変更</button>
+        <button id="btn-br-del-node" class="danger-2">🗑 ノード削除</button>
+        <button id="btn-br-add-edge">→ 接続を追加</button>
+        <button id="btn-br-edge-label">接続ラベル変更</button>
+        <button id="btn-br-del-edge" class="danger-2">接続削除</button>
+        <button id="btn-br-fit">⛶ 全体表示</button>
+      </div>
+      <div class="branch-split">
+        <div class="graph-col">
+          <div class="graph-wrap">
+            <svg id="br-svg" class="graph-svg"></svg>
+          </div>
+          <div class="hint" style="margin-top:6px">矢印は「元 → 先」を表します／ノードはドラッグで移動</div>
+        </div>
+        <div class="note-col">
+          <label class="hint" id="br-note-title">ノードを選択するとメモを編集できます</label>
+          <textarea id="branch-note" disabled placeholder="この分岐で何が起こるか、選んだ場合の展開などをメモ"></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<!-- ================================================== ルビ設定ダイアログ -->
+<dialog id="ruby-dialog">
+  <h2>ルビの設定</h2>
+  <div class="form-row"><label>親文字</label><input id="ruby-base"></div>
+  <div class="form-row"><label>ふりがな</label><input id="ruby-kana" placeholder="例: ライバル"></div>
+  <p class="hint">漢字のみ→ 親文字《ふりがな》 / 混在→ ｜親文字《ふりがな》</p>
+  <div class="form-actions">
+    <button id="ruby-cancel">キャンセル</button>
+    <button id="ruby-ok" class="primary" disabled>入力する</button>
+  </div>
+</dialog>
+
+<!-- ================================================== 登録先選択ダイアログ -->
+<dialog id="register-dialog">
+  <h2>選択テキストを登録</h2>
+  <p class="hint" id="register-preview"></p>
+  <div class="form-row"><label>登録先</label>
+    <select id="register-target">
+      <option value="ref">資料に登録</option>
+      <option value="world">世界観に登録</option>
+      <option value="char">登場人物メモに登録</option>
+    </select>
+  </div>
+  <div class="form-row"><label id="register-title-label">登録タイトル</label><input id="register-title"></div>
+  <div class="form-actions">
+    <button id="register-cancel">キャンセル</button>
+    <button id="register-ok" class="primary">登録</button>
+  </div>
+</dialog>
+
+<!-- ================================================== 縦書きプレビュー -->
+<dialog id="vprev-dialog" class="wide">
+  <h2 id="vprev-title">縦書きプレビュー</h2>
+  <div class="preview-count" id="vprev-count"></div>
+  <p class="hint">右から左へ／ルビ・傍点は親文字のみ表示</p>
+  <div class="tategaki" id="vprev-body"></div>
+  <div class="form-actions"><button id="vprev-close" class="primary">閉じる</button></div>
+</dialog>
+
+<!-- ================================================== 章・全体プレビュー -->
+<dialog id="cprev-dialog" class="wide">
+  <h2>横書きプレビュー（章・作品全体）</h2>
+  <div class="form-row"><label>範囲</label><select id="cprev-range"></select>
+    <span class="preview-count" id="cprev-count" style="margin-top:6px"></span>
+  </div>
+  <div class="preview-body" id="cprev-body"></div>
+  <div class="form-actions"><button id="cprev-close" class="primary">閉じる</button></div>
+</dialog>
+
+<!-- ================================================== ペア選択ダイアログ -->
+<dialog id="pair-dialog">
+  <h2 id="pair-title"></h2>
+  <div class="form-row"><label id="pair-a-label">A</label><select id="pair-a"></select></div>
+  <div class="form-row"><label id="pair-b-label">B</label><select id="pair-b"></select></div>
+  <div class="form-row"><label id="pair-text-label">ラベル</label><input id="pair-text"></div>
+  <div class="form-actions">
+    <button id="pair-cancel">キャンセル</button>
+    <button id="pair-ok" class="primary">OK</button>
+  </div>
+</dialog>
+
+<!-- ================================================== 汎用入力ダイアログ -->
+<dialog id="prompt-dialog">
+  <h2 id="prompt-title"></h2>
+  <div class="form-row"><input id="prompt-input"></div>
+  <div class="form-actions">
+    <button id="prompt-cancel">キャンセル</button>
+    <button id="prompt-ok" class="primary">OK</button>
+  </div>
+</dialog>
+
+<!-- ================================================== インポートダイアログ -->
+<dialog id="import-dialog">
+  <h2>📥 JSONインポート</h2>
+  <p class="hint">exe版の「JSONバックアップ」ファイルをそのまま読み込めます。</p>
+  <div class="form-row">
+    <label>ファイルを選択</label>
+    <input type="file" id="import-file" accept=".json,application/json">
+  </div>
+  <div class="form-row">
+    <label>またはJSONを貼り付け</label>
+    <textarea id="import-text" rows="5" placeholder='{"app": "yomikaki", ...}'></textarea>
+  </div>
+  <div class="form-row"><label>復元方法</label>
+    <select id="import-mode">
+      <option value="replace">上書き（現在の全データを置き換え）</option>
+      <option value="merge">マージ（現在のデータを残して追加）</option>
+    </select>
+  </div>
+  <p class="warn" id="import-warn">⚠ 上書きすると現在の全データが失われます。必要なら先にエクスポートで控えを取ってください。</p>
+  <div class="form-actions">
+    <button id="btn-import-cancel">キャンセル</button>
+    <button id="btn-import-run" class="primary">インポート実行</button>
+  </div>
+</dialog>
+
+<!-- ================================================== Claudeプロンプト -->
+<dialog id="claude-dialog" class="wide">
+  <h2>🤖 Claude に送る</h2>
+  <div class="form-row"><label>用途</label><select id="claude-template"></select></div>
+  <div id="claude-options"></div>
+  <div class="form-row">
+    <label>プロンプト（送信前に自由に編集できます）</label>
+    <textarea id="claude-prompt" rows="14"></textarea>
+  </div>
+  <p class="hint">コピーしてClaudeを開きます。結果は手動で該当欄に貼り戻してください（API連携はしません）。</p>
+  <div class="form-actions">
+    <button id="claude-regen">↻ 再生成</button>
+    <button id="claude-cancel">キャンセル</button>
+    <button id="claude-copy" class="primary">📋 コピーしてClaudeを開く</button>
+  </div>
+</dialog>
+
+<div id="toast"></div>
+<footer>yomikaki web — 全機能実装済み / データはこの端末のブラウザ内に保存されます（定期的にエクスポートを）</footer>
+
+<script>
+"use strict";
+
+/* ============================================================ データ層
+   exe版のバックアップJSONと同一のテーブル構造で保持する。 */
+const SCHEMA_VERSION = 10;
+const TABLES = [
+  "books", "bookmarks", "impressions", "quotes", "reading_schedule",
+  "works", "chapters", "manuscripts", "plots", "characters",
+  "timeline_events", "refs", "worldbuilding",
+  "relationships", "branch_nodes", "branch_edges",
+];
+const NAROU_GENRES = [
+  "異世界〔恋愛〕", "現実世界〔恋愛〕", "ハイファンタジー", "ローファンタジー",
+  "純文学", "ヒューマンドラマ", "歴史", "推理", "ホラー", "アクション", "コメディー",
+  "VRゲーム", "宇宙", "空想科学", "パニック", "童話", "詩", "エッセイ", "リプレイ",
+  "その他", "ノンジャンル",
+];
+const KAKUYOMU_GENRES = [
+  "異世界ファンタジー", "現代ファンタジー", "SF", "恋愛", "ラブコメ",
+  "現代ドラマ", "ホラー", "ミステリー", "エッセイ・ノンフィクション",
+  "歴史・時代・伝奇", "創作論・評論", "詩・童話・その他",
+];
+
+function emptyTables() {
+  return Object.fromEntries(TABLES.map(t => [t, []]));
+}
+let state = { schema_version: SCHEMA_VERSION, tables: emptyTables() };
+let selectedBookId = null;
+let selImpId = null, selBmId = null, selQuoteId = null;
+let sortKey = "updated_at", sortDir = -1;
+
+function now() {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ` +
+         `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function nextId(table) {
+  return state.tables[table].reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
+}
+function findBook(id) {
+  return state.tables.books.find(b => b.id === id) || null;
+}
+function addRow(table, row) {
+  row.id = nextId(table);
+  state.tables[table].push(row);
+  saveSoon();
+  return row.id;
+}
+function delRow(table, id) {
+  state.tables[table] = state.tables[table].filter(r => r.id !== id);
+  saveSoon();
+}
+function rowsFor(table, bookId, dateKey) {
+  return state.tables[table].filter(r => r.book_id === bookId)
+    .sort((a, b) => (b[dateKey] || "").localeCompare(a[dateKey] || "") || b.id - a.id);
+}
+function latestBookmark(bookId) {
+  return rowsFor("bookmarks", bookId, "updated_at")[0] || null;
+}
+
+/* ============================================================ 永続化 */
+const IDB_NAME = "yomikaki-web", IDB_STORE = "kv", LS_KEY = "yomikaki-web-state";
+let idb = null;
+
+function idbOpen() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function idbGet(key) {
+  return new Promise((resolve, reject) => {
+    const req = idb.transaction(IDB_STORE).objectStore(IDB_STORE).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+function idbSet(key, value) {
+  return new Promise((resolve, reject) => {
+    const tx = idb.transaction(IDB_STORE, "readwrite");
+    tx.objectStore(IDB_STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function loadState() {
+  try {
+    idb = await idbOpen();
+    const saved = await idbGet("state");
+    if (saved && saved.tables) { applyLoaded(saved); return; }
+  } catch (e) { idb = null; }
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) applyLoaded(JSON.parse(raw));
+  } catch (e) { /* 初回起動 */ }
+}
+function applyLoaded(saved) {
+  state = { schema_version: saved.schema_version || SCHEMA_VERSION,
+            tables: Object.assign(emptyTables(), saved.tables) };
+}
+let saveTimer = null;
+function saveSoon() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveNow, 400);
+}
+async function saveNow() {
+  clearTimeout(saveTimer);
+  try {
+    if (idb) { await idbSet("state", state); return; }
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  } catch (e) {
+    toast("⚠ 保存に失敗しました: " + e.message);
+  }
+}
+window.addEventListener("beforeunload", () => { saveNow(); });
+
+/* ============================================================ ユーティリティ */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function starText(v) {
+  const full = Math.floor(v), half = (v - full) >= 0.5;
+  return "★".repeat(full) + (half ? "½" : "") + "☆".repeat(5 - full - (half ? 1 : 0));
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; }
+  catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text; document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy"); ta.remove(); return ok;
+  }
+}
+/* 削除ボタン共通: 1回目で確認表示、2回目で実行（誤操作防止） */
+function twoStep(btn, confirmLabel, fn) {
+  if (btn.dataset.armed === "1") {
+    btn.dataset.armed = ""; btn.textContent = btn.dataset.orig; fn(); return;
+  }
+  btn.dataset.armed = "1"; btn.dataset.orig = btn.textContent;
+  btn.textContent = confirmLabel;
+  setTimeout(() => {
+    if (btn.dataset.armed === "1") {
+      btn.dataset.armed = ""; btn.textContent = btn.dataset.orig;
+    }
+  }, 3500);
+}
+let toastTimer = null;
+function toast(message) {
+  const el = $("toast");
+  el.textContent = message;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2600);
+}
+
+/* ============================================================ books CRUD */
+function collectForm() {
+  return {
+    title: $("in-title").value.trim(),
+    author: $("in-author").value.trim(),
+    source: $("in-source").value,
+    url: $("in-url").value.trim(),
+    genre: $("in-genre").value.trim(),
+    tags: $("in-tags").value.trim(),
+    status: $("in-status").value,
+    star_rating: Math.min(5, Math.max(0, Number($("in-star").value) || 0)),
+    synopsis: $("in-synopsis").value,
+    summary: $("in-summary").value,
+  };
+}
+function upsertBook(data) {
+  const ts = now();
+  if (selectedBookId === null) {
+    const book = Object.assign({
+      id: nextId("books"), ncode: "",
+      finished_at: data.status === "完読" ? ts : null,
+      created_at: ts, updated_at: ts,
+    }, data);
+    state.tables.books.push(book);
+    selectedBookId = book.id;
+  } else {
+    const book = findBook(selectedBookId);
+    if (!book) return;
+    Object.assign(book, data, { updated_at: ts });
+    // 完読記録: 完読にしたら日時を自動記録、外したらクリア（exe版と同じ）
+    book.finished_at = data.status === "完読" ? (book.finished_at || ts) : null;
+  }
+  saveSoon();
+}
+function deleteBook(id) {
+  state.tables.books = state.tables.books.filter(b => b.id !== id);
+  for (const t of ["bookmarks", "impressions", "quotes", "reading_schedule"]) {
+    state.tables[t] = state.tables[t].filter(r => r.book_id !== id);
+  }
+  saveSoon();
+}
+
+/* ============================================================ 一覧 */
+function renderGenreFilter() {
+  const current = $("f-genre").value;
+  const genres = [...new Set(state.tables.books.map(b => b.genre).filter(Boolean))].sort();
+  $("f-genre").innerHTML = '<option value="">ジャンル: すべて</option>' +
+    genres.map(g => `<option${g === current ? " selected" : ""}>${esc(g)}</option>`).join("");
+}
+function renderList() {
+  renderGenreFilter();
+  const kw = $("search").value.trim().toLowerCase();
+  const src = $("f-source").value, gen = $("f-genre").value, st = $("f-status").value;
+  let books = state.tables.books.filter(b =>
+    (!kw || (b.title + b.author + (b.tags || "")).toLowerCase().includes(kw)) &&
+    (!src || b.source === src) && (!gen || b.genre === gen) &&
+    (!st || b.status === st));
+  books.sort((a, b) => {
+    const x = a[sortKey] ?? "", y = b[sortKey] ?? "";
+    const cmp = (typeof x === "number" || typeof y === "number")
+      ? (Number(x) - Number(y)) : String(x).localeCompare(String(y));
+    return cmp * sortDir;
+  });
+  $("book-rows").innerHTML = books.map(b => {
+    const bm = latestBookmark(b.id);
+    return `
+    <tr data-id="${b.id}" class="${b.id === selectedBookId ? "selected" : ""}">
+      <td>${esc(b.title)}</td><td>${esc(b.author)}</td>
+      <td>${esc(b.genre || "")}</td>
+      <td class="star-cell">${b.star_rating ? "★" + b.star_rating : ""}</td>
+      <td>${esc(b.status)}</td>
+      <td>${bm ? "第" + bm.episode_no + "話" : ""}</td>
+      <td>${esc((b.updated_at || "").slice(0, 10))}</td>
+    </tr>`;
+  }).join("");
+  const total = state.tables.books.length;
+  const done = state.tables.books.filter(b => b.status === "完読").length;
+  $("count-label").textContent = `${books.length} / ${total} 件　📚 完読 ${done} 冊`;
+  document.querySelectorAll("#book-rows tr").forEach(tr =>
+    tr.addEventListener("click", () => selectBook(Number(tr.dataset.id))));
+}
+
+/* ============================================================ 詳細フォーム */
+function updateGenreDatalist() {
+  const source = $("in-source").value;
+  const genres = source === "なろう" ? NAROU_GENRES
+    : source === "カクヨム" ? KAKUYOMU_GENRES : [];
+  $("genre-list").innerHTML = genres.map(g => `<option>${esc(g)}</option>`).join("");
+}
+function setSubtabsEnabled(enabled) {
+  document.querySelectorAll('#detail-tabs button').forEach(btn => {
+    if (["imp", "bm", "quote"].includes(btn.dataset.tab)) btn.disabled = !enabled;
+  });
+}
+function showTab(name) {
+  document.querySelectorAll("#detail-tabs button").forEach(b =>
+    b.classList.toggle("active", b.dataset.tab === name));
+  document.querySelectorAll(".tab-body").forEach(d =>
+    d.classList.toggle("active", d.id === "tab-" + name));
+}
+function selectBook(id) {
+  const book = findBook(id);
+  if (!book) return;
+  selectedBookId = id;
+  $("form-title").textContent = `編集：${book.title}`;
+  $("in-title").value = book.title;
+  $("in-author").value = book.author || "";
+  $("in-source").value = book.source || "その他";
+  updateGenreDatalist();
+  $("in-url").value = book.url || "";
+  $("in-genre").value = book.genre || "";
+  $("in-tags").value = book.tags || "";
+  $("in-status").value = book.status || "読みたい";
+  $("in-star").value = book.star_rating || 0;
+  $("star-display").textContent = starText(book.star_rating || 0);
+  $("finished-label").textContent = book.finished_at || "—";
+  $("in-synopsis").value = book.synopsis || "";
+  $("in-summary").value = book.summary || "";
+  $("btn-delete").hidden = false;
+  setSubtabsEnabled(true);
+  renderImps(); renderBms(); renderQuotes();
+  renderList();
+}
+function startNew() {
+  selectedBookId = null;
+  selImpId = selBmId = selQuoteId = null;
+  $("form-title").textContent = "新規作品の登録";
+  for (const f of ["in-title", "in-author", "in-url", "in-genre", "in-tags",
+                   "in-synopsis", "in-summary", "imp-input", "quote-input",
+                   "quote-category", "quote-note", "bm-note"]) $(f).value = "";
+  $("in-source").value = "なろう";
+  updateGenreDatalist();
+  $("in-status").value = "読みたい";
+  $("in-star").value = 0;
+  $("star-display").textContent = starText(0);
+  $("finished-label").textContent = "—";
+  $("bm-episode").value = "";
+  $("btn-delete").hidden = true;
+  setSubtabsEnabled(false);
+  showTab("basic");
+  renderImps(); renderBms(); renderQuotes();
+  renderList();
+  $("in-title").focus();
+}
+function saveForm() {
+  const data = collectForm();
+  if (!data.title) { toast("タイトルは必須です"); $("in-title").focus(); return; }
+  upsertBook(data);
+  const book = findBook(selectedBookId);
+  $("form-title").textContent = `編集：${data.title}`;
+  $("finished-label").textContent = (book && book.finished_at) || "—";
+  $("btn-delete").hidden = false;
+  setSubtabsEnabled(true);
+  renderList();
+  toast("保存しました");
+}
+
+/* ============================================================ 感想 */
+function renderImps() {
+  const items = selectedBookId === null ? [] :
+    rowsFor("impressions", selectedBookId, "created_at");
+  $("imp-list").innerHTML = items.map(r => `
+    <li data-id="${r.id}" class="${r.id === selImpId ? "selected" : ""}">
+      ${esc(r.created_at)}　${esc(r.content.replace(/\n/g, " ").slice(0, 30))}</li>`).join("");
+  const sel = items.find(r => r.id === selImpId);
+  $("imp-view").textContent = sel ? sel.content : "";
+  document.querySelectorAll("#imp-list li").forEach(li =>
+    li.addEventListener("click", () => { selImpId = Number(li.dataset.id); renderImps(); }));
+}
+function addImp() {
+  const content = $("imp-input").value.trim();
+  if (!content) { toast("感想の本文を入力してください"); return; }
+  selImpId = addRow("impressions",
+    { book_id: selectedBookId, content, created_at: now() });
+  $("imp-input").value = "";
+  renderImps();
+  toast("感想を追記しました");
+}
+
+/* ============================================================ しおり */
+function renderBms() {
+  const items = selectedBookId === null ? [] :
+    rowsFor("bookmarks", selectedBookId, "updated_at");
+  const latest = items[0];
+  $("bm-current").textContent = latest
+    ? `🔖 第${latest.episode_no}話まで${latest.note ? "　" + latest.note : ""}（${latest.updated_at}）`
+    : "しおりはまだありません";
+  $("bm-list").innerHTML = items.map(r => `
+    <li data-id="${r.id}" class="${r.id === selBmId ? "selected" : ""}">
+      ${esc(r.updated_at)}　第${esc(r.episode_no)}話${r.note ? "　" + esc(r.note) : ""}</li>`).join("");
+  document.querySelectorAll("#bm-list li").forEach(li =>
+    li.addEventListener("click", () => { selBmId = Number(li.dataset.id); renderBms(); }));
+}
+function addBm() {
+  const ep = Number($("bm-episode").value);
+  if (!$("bm-episode").value || ep < 0) { toast("話数を入力してください"); return; }
+  selBmId = addRow("bookmarks", {
+    book_id: selectedBookId, episode_no: ep,
+    note: $("bm-note").value.trim(), updated_at: now(),
+  });
+  $("bm-note").value = "";
+  renderBms();
+  renderList();  // 一覧のしおり列に反映
+  toast("しおりを更新しました");
+}
+
+/* ============================================================ 引用・語彙 */
+function renderQuotes() {
+  const items = selectedBookId === null ? [] :
+    rowsFor("quotes", selectedBookId, "created_at");
+  $("quote-list").innerHTML = items.map(r => `
+    <li data-id="${r.id}" class="${r.id === selQuoteId ? "selected" : ""}">
+      ${esc(r.created_at)}　${r.category ? "[" + esc(r.category) + "] " : ""}${esc(r.content.replace(/\n/g, " ").slice(0, 26))}</li>`).join("");
+  const sel = items.find(r => r.id === selQuoteId);
+  $("quote-view").textContent = sel
+    ? sel.content + (sel.note ? `\n\n―― メモ: ${sel.note}` : "") : "";
+  document.querySelectorAll("#quote-list li").forEach(li =>
+    li.addEventListener("click", () => { selQuoteId = Number(li.dataset.id); renderQuotes(); }));
+}
+function addQuote() {
+  const content = $("quote-input").value.trim();
+  if (!content) { toast("記録するテキストを貼り付けてください"); return; }
+  selQuoteId = addRow("quotes", {
+    book_id: selectedBookId, content,
+    category: $("quote-category").value.trim(),
+    note: $("quote-note").value.trim(), created_at: now(),
+  });
+  $("quote-input").value = "";
+  $("quote-note").value = "";
+  renderQuotes();
+  toast("引用を記録しました");
+}
+async function copyQuote() {
+  const sel = state.tables.quotes.find(r => r.id === selQuoteId);
+  if (!sel) { toast("コピーする引用を一覧から選択してください"); return; }
+  toast(await copyText(sel.content) ? "引用をコピーしました" : "⚠ コピーできませんでした");
+}
+
+/* ============================================================ 読者サブタブ */
+function switchReaderTab(name) {
+  document.querySelectorAll(".reader-tabs button").forEach(b =>
+    b.classList.toggle("active", b.dataset.rtab === name));
+  document.querySelectorAll(".rtab").forEach(s =>
+    s.classList.toggle("active", s.id === "rtab-" + name));
+  if (name === "books") renderList();
+  if (name === "calendar") refreshCalendarTab();
+  if (name === "quotes") renderQuotesPage();
+}
+
+/* ============================================================ カレンダー */
+let calCursor = new Date();   // 表示中の月（1日固定）
+calCursor.setDate(1);
+let selectedDate = null;      // "YYYY-MM-DD"
+
+function fmtDate(d) {
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+function fmtDateJa(str) {
+  const d = new Date(str + "T00:00:00");
+  return `${d.getMonth()+1}/${d.getDate()}（${"日月火水木金土"[d.getDay()]}）`;
+}
+function bookTitle(id) {
+  const b = findBook(id);
+  return b ? b.title : "（削除済みの作品）";
+}
+function schedulesOn(dateStr) {
+  return state.tables.reading_schedule
+    .filter(r => r.scheduled_date === dateStr).sort((a, b) => a.id - b.id);
+}
+function schedMarks() {
+  const marks = {};
+  for (const r of state.tables.reading_schedule) {
+    const m = marks[r.scheduled_date] || (marks[r.scheduled_date] = { total: 0, done: 0 });
+    m.total++;
+    if (r.done) m.done++;
+  }
+  return marks;
+}
+function finishedDates() {
+  return new Set(state.tables.books
+    .filter(b => b.finished_at).map(b => b.finished_at.slice(0, 10)));
+}
+
+function refreshCalendarTab() {
+  if (selectedDate === null) selectedDate = fmtDate(new Date());
+  renderCalendar();
+  renderDayPanel();
+  renderTodayWeek();
+  renderSchedBookSelect();
+}
+function renderCalendar() {
+  const y = calCursor.getFullYear(), m = calCursor.getMonth();
+  $("cal-title").textContent = `${y}年 ${m+1}月`;
+  const marks = schedMarks(), finished = finishedDates();
+  const todayStr = fmtDate(new Date());
+  // 月曜始まりのグリッド（前月末〜翌月頭を含む）
+  const first = new Date(y, m, 1);
+  const start = new Date(first);
+  start.setDate(1 - (first.getDay() + 6) % 7);
+  let html = ["月", "火", "水", "木", "金", "土", "日"]
+    .map(w => `<div class="dow">${w}</div>`).join("");
+  const cursor = new Date(start);
+  while (true) {
+    const ds = fmtDate(cursor);
+    const inMonth = cursor.getMonth() === m;
+    const mark = marks[ds];
+    const cls = ["cal-cell",
+      inMonth ? "" : "other",
+      ds === todayStr ? "today" : "",
+      ds === selectedDate ? "selected" : "",
+      finished.has(ds) ? "finished" : ""].filter(Boolean).join(" ");
+    const dot = mark
+      ? `<span class="cal-dot ${mark.done >= mark.total ? "done" : "pending"}"></span>` : "";
+    html += `<div class="${cls}" data-date="${ds}">${cursor.getDate()}${dot}</div>`;
+    cursor.setDate(cursor.getDate() + 1);
+    if (cursor.getMonth() !== m && (cursor.getDay() + 6) % 7 === 0 && cursor > first) break;
+  }
+  $("cal-grid").innerHTML = html;
+  document.querySelectorAll(".cal-cell").forEach(cell =>
+    cell.addEventListener("click", () => {
+      selectedDate = cell.dataset.date;
+      renderCalendar();
+      renderDayPanel();
+    }));
+}
+function renderDayPanel() {
+  $("day-title").textContent = `${fmtDateJa(selectedDate)} の予定`;
+  const items = schedulesOn(selectedDate);
+  $("day-scheds").innerHTML = items.length ? items.map(r => `
+    <div class="sched-item" data-id="${r.id}">
+      <input type="checkbox" ${r.done ? "checked" : ""} title="チェックで読了">
+      <span>${esc(bookTitle(r.book_id))}${r.note ? "　" + esc(r.note) : ""}</span>
+      <button class="x" title="この予定を削除">✕</button>
+    </div>`).join("")
+    : '<div class="plan-empty">（この日の予定はありません）</div>';
+  document.querySelectorAll("#day-scheds .sched-item").forEach(el => {
+    const id = Number(el.dataset.id);
+    const row = state.tables.reading_schedule.find(r => r.id === id);
+    el.querySelector("input").addEventListener("change", ev => {
+      row.done = ev.target.checked ? 1 : 0;   // exe版と同じ 0/1 整数で保持
+      saveSoon();
+      renderCalendar(); renderDayPanel(); renderTodayWeek();
+    });
+    el.querySelector(".x").addEventListener("click", ev =>
+      twoStep(ev.target, "⚠削除", () => {
+        delRow("reading_schedule", id);
+        renderCalendar(); renderDayPanel(); renderTodayWeek();
+      }));
+  });
+}
+function renderSchedBookSelect() {
+  const books = [...state.tables.books]
+    .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+  $("sched-book").innerHTML = books.length
+    ? books.map(b => `<option value="${b.id}">${esc(b.title)}</option>`).join("")
+    : '<option value="">（作品がありません）</option>';
+}
+function addSched() {
+  const bookId = Number($("sched-book").value);
+  if (!bookId) { toast("先に作品リストで作品を追加してください"); return; }
+  addRow("reading_schedule", {
+    book_id: bookId, scheduled_date: selectedDate, done: 0,
+    note: $("sched-note").value.trim(),
+  });
+  $("sched-note").value = "";
+  renderCalendar(); renderDayPanel(); renderTodayWeek();
+  toast(`${fmtDateJa(selectedDate)} に予定を追加しました`);
+}
+function renderTodayWeek() {
+  const today = new Date();
+  const todayStr = fmtDate(today);
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (today.getDay() + 6) % 7);
+  const planLine = r =>
+    `<div class="plan-item">${r.done ? "✅" : "⬜"} ${esc(bookTitle(r.book_id))}` +
+    `${r.note ? "　" + esc(r.note) : ""}</div>`;
+  const todays = schedulesOn(todayStr);
+  $("today-list").innerHTML = todays.length ? todays.map(planLine).join("")
+    : '<div class="plan-empty">（予定なし）</div>';
+  let weekHtml = "";
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const items = schedulesOn(fmtDate(d));
+    for (const r of items) {
+      weekHtml += `<div class="plan-item">${fmtDateJa(fmtDate(d))}　` +
+        `${r.done ? "✅" : "⬜"} ${esc(bookTitle(r.book_id))}</div>`;
+    }
+  }
+  $("week-list").innerHTML = weekHtml || '<div class="plan-empty">（予定なし）</div>';
+}
+
+/* ============================================================ 引用・語彙帳 */
+let selQPageId = null;
+
+function allQuotesFiltered() {
+  const kw = $("q-search").value.trim().toLowerCase();
+  const cat = $("q-category").value;
+  return state.tables.quotes
+    .map(q => ({ ...q, book_title: bookTitle(q.book_id) }))
+    .filter(q =>
+      (!kw || (q.content + (q.note || "") + q.book_title).toLowerCase().includes(kw)) &&
+      (!cat || q.category === cat))
+    .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || "") || b.id - a.id);
+}
+function renderQuotesPage() {
+  const current = $("q-category").value;
+  const cats = [...new Set(state.tables.quotes.map(q => q.category).filter(Boolean))].sort();
+  $("q-category").innerHTML = '<option value="">分類: すべて</option>' +
+    cats.map(c => `<option${c === current ? " selected" : ""}>${esc(c)}</option>`).join("");
+  const quotes = allQuotesFiltered();
+  $("q-rows").innerHTML = quotes.map(q => `
+    <tr data-id="${q.id}" class="${q.id === selQPageId ? "selected" : ""}">
+      <td>${esc(q.created_at)}</td><td>${esc(q.category || "")}</td>
+      <td>${esc(q.content.replace(/\n/g, " ").slice(0, 40))}</td>
+      <td>${esc(q.book_title)}</td>
+    </tr>`).join("");
+  const sel = quotes.find(q => q.id === selQPageId);
+  $("q-view").textContent = sel
+    ? sel.content + (sel.note ? `\n\n―― メモ: ${sel.note}` : "") + `\n出典: ${sel.book_title}`
+    : "";
+  $("q-count").textContent = `全 ${quotes.length} 件`;
+  document.querySelectorAll("#q-rows tr").forEach(tr =>
+    tr.addEventListener("click", () => {
+      selQPageId = Number(tr.dataset.id);
+      renderQuotesPage();
+    }));
+}
+async function copyQuotePage() {
+  const sel = state.tables.quotes.find(q => q.id === selQPageId);
+  if (!sel) { toast("コピーする引用を一覧から選択してください"); return; }
+  toast(await copyText(sel.content) ? "引用をコピーしました" : "⚠ コピーできませんでした");
+}
+
+/* ============================================================ 汎用入力ダイアログ */
+let promptResolve = null;
+function promptDialog(title, defaultValue = "") {
+  return new Promise(resolve => {
+    promptResolve = resolve;
+    $("prompt-title").textContent = title;
+    $("prompt-input").value = defaultValue;
+    $("prompt-dialog").showModal();
+    $("prompt-input").focus();
+  });
+}
+function closePrompt(value) {
+  $("prompt-dialog").close();
+  if (promptResolve) { promptResolve(value); promptResolve = null; }
+}
+
+/* ============================================================ 作者モード: データ */
+let selWorkId = null;
+let selNode = null;        // {kind: "chapter"|"episode", id}
+let currentMsId = null;
+let msDirty = false;
+let msFlushTimer = null;
+
+function countChars(text) {
+  return text.replace(/[\n\r]/g, "").length;  // 改行を除く（exe版と同じ）
+}
+
+/* ---- カクヨム互換の記法変換（exe版 text_tools 相当） */
+const KANJI_ONLY = /^[々〇〻㐀-鿿豈-﫿]+$/;
+function isKanjiOnly(t) { return !!t && KANJI_ONLY.test(t); }
+function formatRuby(base, kana) {
+  return isKanjiOnly(base) ? `${base}《${kana}》` : `｜${base}《${kana}》`;
+}
+function formatBoten(text) {
+  return [...text].map(ch => /\s/.test(ch) ? ch : `｜${ch}《・》`).join("");
+}
+const RUBY_RE = /｜?([^｜《》\n]+)《[^《》\n]*》/g;
+function stripRuby(text) { return text.replace(RUBY_RE, "$1"); }
+function setLineSpacing(text, n) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n").filter(l => l.trim() !== "");
+  return lines.join("\n".repeat(n));
+}
+const NO_INDENT = new Set([..."「『（(〈《【〔［[｟“\"'＜<―"]);
+function addIndentation(text) {
+  return text.replace(/\r\n/g, "\n").split("\n").map(line => {
+    if (line.trim() === "") return line;
+    if (/^[　 \t]/.test(line)) return line;
+    if (NO_INDENT.has(line[0])) return line;
+    return "　" + line;
+  }).join("\n");
+}
+function findWork(id) { return state.tables.works.find(w => w.id === id) || null; }
+function findMs(id) { return state.tables.manuscripts.find(m => m.id === id) || null; }
+function chaptersOf(workId) {
+  return state.tables.chapters.filter(c => c.work_id === workId)
+    .sort((a, b) => (a.order_no - b.order_no) || (a.id - b.id));
+}
+function msInGroup(workId, chapterId) {
+  return state.tables.manuscripts
+    .filter(m => m.work_id === workId && (m.chapter_id ?? null) === chapterId)
+    .sort((a, b) => (a.order_no - b.order_no) || (a.id - b.id));
+}
+function workCharTotal(workId) {
+  return state.tables.manuscripts.filter(m => m.work_id === workId)
+    .reduce((n, m) => n + (m.char_count || 0), 0);
+}
+function workEpisodeCount(workId) {
+  return state.tables.manuscripts.filter(m => m.work_id === workId).length;
+}
+function touchWork(workId) {
+  const w = findWork(workId);
+  if (w) w.updated_at = now();
+}
+function deleteWorkCascade(workId) {
+  const chIds = chaptersOf(workId).map(c => c.id);
+  const charIds = state.tables.characters
+    .filter(c => c.work_id === workId).map(c => c.id);
+  const nodeIds = state.tables.branch_nodes
+    .filter(n => n.work_id === workId).map(n => n.id);
+  for (const t of ["chapters", "manuscripts", "plots", "characters",
+                   "timeline_events", "refs", "worldbuilding",
+                   "relationships", "branch_nodes", "branch_edges"]) {
+    state.tables[t] = state.tables[t].filter(r => r.work_id !== workId);
+  }
+  void chIds; void charIds; void nodeIds;  // work_id で全て消えるため参照掃除は不要
+  state.tables.works = state.tables.works.filter(w => w.id !== workId);
+  saveSoon();
+}
+/* 兄弟の並びを入れ替えて order_no を 1 から振り直す（exe版と同方式） */
+function moveSibling(rows, id, delta) {
+  const ids = rows.map(r => r.id);
+  const i = ids.indexOf(id), j = i + delta;
+  if (i < 0 || j < 0 || j >= ids.length) return false;
+  [ids[i], ids[j]] = [ids[j], ids[i]];
+  ids.forEach((rid, index) => {
+    rows.find(r => r.id === rid).order_no = index + 1;
+  });
+  saveSoon();
+  return true;
+}
+
+/* ============================================================ 作者モード: UI */
+function renderWorks() {
+  const works = [...state.tables.works]
+    .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+  $("works-list").innerHTML = works.map(w => `
+    <li data-id="${w.id}" class="${w.id === selWorkId ? "selected" : ""}">✍️ ${esc(w.title)}</li>`).join("");
+  document.querySelectorAll("#works-list li").forEach(li =>
+    li.addEventListener("click", () => selectWork(Number(li.dataset.id))));
+}
+const WVIEWS = ["hint", "info", "ms", "plot", "chars", "world", "timeline",
+                "refs", "relation", "branch"];
+function showWView(name) {
+  flushMs();
+  flushPlot();
+  flushBranchNote();
+  document.querySelectorAll("#w-toolbar button[data-wview]").forEach(b =>
+    b.classList.toggle("active", b.dataset.wview === name));
+  for (const v of WVIEWS) $("wv-" + v).hidden = name !== v;
+  if (name === "info") renderWInfo();
+  if (name === "plot") loadPlot();
+  if (name === "chars") renderCharList();
+  if (name === "world") renderWorldList();
+  if (name === "timeline") renderTimeline();
+  if (name === "refs") renderRefsList();
+  if (name === "relation") renderRelation();
+  if (name === "branch") renderBranch();
+}
+function selectWork(id) {
+  flushMs();
+  flushPlot();
+  flushBranchNote();
+  selWorkId = id;
+  selNode = null;
+  selCharId = selWorldId = selTlId = selRefId = null;
+  selRelEdge = selBranchNode = selBranchEdge = null;
+  loadEditor(null);
+  renderWorks();
+  renderTree();
+  showWView("ms");   // 既定で執筆原稿を開く
+}
+function renderWInfo() {
+  const w = findWork(selWorkId);
+  if (!w) return;
+  $("w-title").value = w.title;
+  $("w-genre").value = w.genre || "";
+  $("w-synopsis").value = w.synopsis || "";
+  $("w-stats").textContent =
+    `全 ${workEpisodeCount(selWorkId)} 話 / 合計 ${workCharTotal(selWorkId).toLocaleString()} 字`;
+}
+function saveWInfo() {
+  const w = findWork(selWorkId);
+  if (!w) return;
+  const title = $("w-title").value.trim();
+  if (!title) { toast("タイトルは必須です"); return; }
+  Object.assign(w, {
+    title, genre: $("w-genre").value.trim(),
+    synopsis: $("w-synopsis").value, updated_at: now(),
+  });
+  saveSoon();
+  renderWorks();
+  toast("保存しました");
+}
+
+/* ---- 章立てツリー */
+function renderTree() {
+  if (selWorkId === null) { $("ms-tree").innerHTML = ""; return; }
+  const parts = [];
+  const nodeLi = (kind, r, extraClass = "") => {
+    const selected = selNode && selNode.kind === kind && selNode.id === r.id;
+    const label = kind === "chapter"
+      ? `📂 ${esc(r.title)}`
+      : `📄 ${esc(r.title)}（${(r.char_count || 0).toLocaleString()}字）`;
+    return `<li data-kind="${kind}" data-id="${r.id}"
+      class="${extraClass} ${selected ? "selected" : ""}">${label}</li>`;
+  };
+  for (const ch of chaptersOf(selWorkId)) {
+    parts.push(nodeLi("chapter", ch));
+    for (const ep of msInGroup(selWorkId, ch.id)) parts.push(nodeLi("episode", ep, "ep-child"));
+  }
+  for (const ep of msInGroup(selWorkId, null)) parts.push(nodeLi("episode", ep));
+  $("ms-tree").innerHTML = parts.join("");
+  document.querySelectorAll("#ms-tree li").forEach(li =>
+    li.addEventListener("click", () =>
+      selectNode(li.dataset.kind, Number(li.dataset.id))));
+  $("ms-total").textContent =
+    `（作品合計 ${workCharTotal(selWorkId).toLocaleString()} 字）`;
+}
+function selectNode(kind, id) {
+  flushMs();
+  selNode = { kind, id };
+  loadEditor(kind === "episode" ? id : null);
+  renderTree();
+}
+function selectedChapterId() {
+  if (!selNode) return null;
+  if (selNode.kind === "chapter") return selNode.id;
+  const ms = findMs(selNode.id);
+  return ms ? (ms.chapter_id ?? null) : null;
+}
+async function addChapter() {
+  if (selWorkId === null) return;
+  const title = await promptDialog("章のタイトル", "第一章");
+  if (!title || !title.trim()) return;
+  const id = addRow("chapters", {
+    work_id: selWorkId, title: title.trim(),
+    order_no: chaptersOf(selWorkId).length + 1,
+  });
+  selNode = { kind: "chapter", id };
+  renderTree();
+}
+async function addEpisode() {
+  if (selWorkId === null) return;
+  const title = await promptDialog("話のタイトル", "第1話");
+  if (!title || !title.trim()) return;
+  const chapterId = selectedChapterId();
+  const id = addRow("manuscripts", {
+    work_id: selWorkId, chapter_id: chapterId,
+    order_no: msInGroup(selWorkId, chapterId).length + 1,
+    title: title.trim(), body: "", char_count: 0, updated_at: now(),
+  });
+  touchWork(selWorkId);
+  selNode = { kind: "episode", id };
+  loadEditor(id);
+  renderTree();
+}
+async function renameNode() {
+  if (!selNode) { toast("ツリーで章か話を選択してください"); return; }
+  const row = selNode.kind === "chapter"
+    ? state.tables.chapters.find(c => c.id === selNode.id)
+    : findMs(selNode.id);
+  if (!row) return;
+  const title = await promptDialog("新しいタイトル", row.title);
+  if (!title || !title.trim()) return;
+  row.title = title.trim();
+  if (selNode.kind === "episode") row.updated_at = now();
+  saveSoon();
+  renderTree();
+}
+function deleteNode() {
+  if (!selNode) { toast("ツリーで章か話を選択してください"); return; }
+  if (selNode.kind === "chapter") {
+    // 章の中の話も削除（exe版の CASCADE と同じ）
+    state.tables.manuscripts = state.tables.manuscripts
+      .filter(m => m.chapter_id !== selNode.id);
+    delRow("chapters", selNode.id);
+  } else {
+    if (currentMsId === selNode.id) { msDirty = false; loadEditor(null); }
+    delRow("manuscripts", selNode.id);
+  }
+  touchWork(selWorkId);
+  selNode = null;
+  loadEditor(null);
+  renderTree();
+}
+function moveNode(delta) {
+  if (!selNode) return;
+  if (selNode.kind === "chapter") {
+    moveSibling(chaptersOf(selWorkId), selNode.id, delta);
+  } else {
+    const ms = findMs(selNode.id);
+    if (ms) moveSibling(msInGroup(selWorkId, ms.chapter_id ?? null), selNode.id, delta);
+  }
+  renderTree();
+}
+
+/* ---- エディタ＋自動保存 */
+function loadEditor(msId) {
+  currentMsId = msId;
+  msDirty = false;
+  const editor = $("ms-editor");
+  if (msId === null) {
+    editor.value = "";
+    editor.disabled = true;
+    $("ms-count").textContent = "— 字";
+    $("ms-save-label").textContent = "";
+    return;
+  }
+  const ms = findMs(msId);
+  editor.value = ms ? ms.body : "";
+  editor.disabled = false;
+  $("ms-count").textContent = `${countChars(editor.value).toLocaleString()} 字`;
+  $("ms-save-label").textContent = ms ? `保存済み（${ms.updated_at}）` : "";
+}
+function onMsInput() {
+  if (currentMsId === null) return;
+  msDirty = true;
+  $("ms-count").textContent =
+    `${countChars($("ms-editor").value).toLocaleString()} 字`;
+  $("ms-save-label").textContent = "未保存…";
+  clearTimeout(msFlushTimer);
+  msFlushTimer = setTimeout(flushMs, 800);   // 入力が止まって0.8秒で自動保存
+}
+function flushMs() {
+  clearTimeout(msFlushTimer);
+  if (!msDirty || currentMsId === null) return;
+  const ms = findMs(currentMsId);
+  if (!ms) { msDirty = false; return; }
+  ms.body = $("ms-editor").value;
+  ms.char_count = countChars(ms.body);
+  ms.updated_at = now();
+  touchWork(ms.work_id);
+  msDirty = false;
+  saveSoon();
+  $("ms-save-label").textContent =
+    `保存済み（${ms.updated_at.slice(11)}）`;
+  renderTree();  // ツリーの文字数表示を更新（選択は維持される）
+}
+
+async function addWork() {
+  const title = await promptDialog("作品タイトル", "");
+  if (!title || !title.trim()) return;
+  const ts = now();
+  const id = addRow("works", {
+    title: title.trim(), synopsis: "", genre: "",
+    created_at: ts, updated_at: ts,
+  });
+  selectWork(id);
+}
+
+/* ============================================================ 執筆支援ツール */
+function msEditing(feature) {
+  if (currentMsId === null || $("ms-editor").disabled) {
+    toast("先に左のツリーで「話」を選択してください");
+    return false;
+  }
+  return true;
+}
+function editorSelection() {
+  const ed = $("ms-editor");
+  return { start: ed.selectionStart, end: ed.selectionEnd,
+           text: ed.value.slice(ed.selectionStart, ed.selectionEnd) };
+}
+function replaceSelection(newText, cursorBack = 0) {
+  const ed = $("ms-editor");
+  const s = ed.selectionStart, e = ed.selectionEnd;
+  // execCommand で挿入するとネイティブの undo 履歴に積まれ Ctrl+Z が効く
+  ed.focus();
+  ed.setSelectionRange(s, e);
+  if (!document.execCommand("insertText", false, newText)) {
+    ed.setRangeText(newText, s, e, "end");   // フォールバック
+  }
+  const pos = s + newText.length - cursorBack;
+  ed.setSelectionRange(pos, pos);
+  onMsInput();
+}
+function insertSnippet(snippet, back) {
+  if (!msEditing()) return;
+  replaceSelection(snippet, back);
+}
+let rubyRange = null;   // ダイアログ表示中に失われる選択範囲を保持
+function applyRuby() {
+  if (!msEditing()) return;
+  const sel = editorSelection();
+  if (!sel.text) { toast("ルビを振る文字列を選択してください"); return; }
+  if (sel.text.includes("\n")) { toast("複数行にはルビを振れません"); return; }
+  rubyRange = { start: sel.start, end: sel.end };
+  openRubyDialog(sel.text);
+}
+function applyBoten() {
+  if (!msEditing()) return;
+  const sel = editorSelection();
+  if (!sel.text) { toast("傍点を付ける文字列を選択してください"); return; }
+  const converted = formatBoten(sel.text);
+  replaceSelection(converted);
+  toast("傍点を付けました");
+}
+function applyLineSpacing(n) {
+  if (!msEditing()) return;
+  const ed = $("ms-editor");
+  const hasSel = ed.selectionStart !== ed.selectionEnd;
+  const fmt = src => {
+    let r = setLineSpacing(src, n);
+    if ($("ms-indent").checked) r = addIndentation(r);
+    return r;
+  };
+  if (hasSel) {
+    replaceSelection(fmt(editorSelection().text));
+  } else {
+    ed.setSelectionRange(0, ed.value.length);
+    replaceSelection(fmt(ed.value));
+  }
+}
+
+/* ---- 選択部分の登録 */
+let registerText = "";
+function openRegisterDialog() {
+  if (!msEditing()) return;
+  const sel = editorSelection();
+  if (!sel.text.trim()) { toast("登録するテキストを選択してください"); return; }
+  registerText = sel.text;
+  const preview = sel.text.replace(/\n/g, " ").slice(0, 40);
+  $("register-preview").textContent = `「${preview}${sel.text.length > 40 ? "…" : ""}」`;
+  $("register-title").value = sel.text.split("\n")[0].slice(0, 20);
+  updateRegisterLabel();
+  $("register-dialog").showModal();
+}
+function updateRegisterLabel() {
+  $("register-title-label").textContent =
+    $("register-target").value === "char" ? "キャラクター名" : "登録タイトル";
+}
+function doRegister() {
+  const target = $("register-target").value;
+  const title = $("register-title").value.trim();
+  if (!title) { toast("タイトルを入力してください"); return; }
+  if (target === "ref") {
+    addRow("refs", { work_id: selWorkId, title, body: registerText, url: "", tag: "" });
+  } else if (target === "world") {
+    addRow("worldbuilding", { work_id: selWorkId, title, body: registerText,
+                              category: "", created_at: now() });
+  } else {
+    addRow("characters", { work_id: selWorkId, name: title, role: "",
+      profile_json: JSON.stringify({ notes: registerText }), x: null, y: null });
+    touchWork(selWorkId);
+  }
+  $("register-dialog").close();
+  const names = { ref: "資料", world: "世界観", char: "登場人物メモ" };
+  toast(`「${title}」を${names[target]}に登録しました（本文はそのまま残ります）`);
+}
+
+/* ---- ルビダイアログ */
+function openRubyDialog(base) {
+  $("ruby-base").value = base;
+  $("ruby-kana").value = "";
+  validateRuby();
+  $("ruby-dialog").showModal();
+  $("ruby-kana").focus();
+}
+function validateRuby() {
+  $("ruby-ok").disabled = !($("ruby-base").value && $("ruby-kana").value);
+}
+function confirmRuby() {
+  const text = formatRuby($("ruby-base").value, $("ruby-kana").value);
+  $("ruby-dialog").close();
+  if (rubyRange) {   // ダイアログで失われた選択を復元してから置換
+    const ed = $("ms-editor");
+    ed.focus();
+    ed.setSelectionRange(rubyRange.start, rubyRange.end);
+  }
+  replaceSelection(text);
+}
+
+/* ---- 本文の結合（章・全体プレビュー/コピー用） */
+function composeChapter(workId, chapterId) {
+  return msInGroup(workId, chapterId).map(m => {
+    const body = m.body.replace(/\n+$/, "");
+    return body ? `◆ ${m.title}\n\n${body}` : `◆ ${m.title}`;
+  }).join("\n\n");
+}
+function composeWork(workId) {
+  const parts = [];
+  const root = composeChapter(workId, null);
+  if (root) parts.push(root);
+  for (const ch of chaptersOf(workId)) {
+    const body = composeChapter(workId, ch.id);
+    parts.push(body ? `■ ${ch.title}\n\n${body}` : `■ ${ch.title}`);
+  }
+  return parts.join("\n\n");
+}
+
+/* ---- 縦書きプレビュー */
+function openVPrev() {
+  if (!msEditing()) return;
+  const body = $("ms-editor").value;
+  if (!body.trim()) { toast("本文がまだありません"); return; }
+  const ms = findMs(currentMsId);
+  $("vprev-title").textContent = `縦書きプレビュー — ${ms ? ms.title : ""}`;
+  $("vprev-count").textContent = `${countChars(body).toLocaleString()} 字`;
+  $("vprev-body").textContent = stripRuby(body);
+  $("vprev-dialog").showModal();
+  $("vprev-dialog").querySelector(".tategaki").scrollLeft =
+    $("vprev-dialog").querySelector(".tategaki").scrollWidth;  // 右端（先頭）へ
+}
+
+/* ---- 章・全体プレビュー */
+function openCPrev() {
+  if (selWorkId === null) return;
+  flushMs();
+  if (!state.tables.manuscripts.some(m => m.work_id === selWorkId)) {
+    toast("話がまだありません"); return;
+  }
+  const opts = ['<option value="all">📚 作品全体</option>'];
+  if (msInGroup(selWorkId, null).length)
+    opts.push('<option value="none">（章に属さない話）</option>');
+  for (const ch of chaptersOf(selWorkId))
+    opts.push(`<option value="ch${ch.id}">📂 ${esc(ch.title)}</option>`);
+  $("cprev-range").innerHTML = opts.join("");
+  // 現在選択中の章をプリセット
+  const chId = selectedChapterId();
+  if (chId != null) $("cprev-range").value = "ch" + chId;
+  renderCPrev();
+  $("cprev-dialog").showModal();
+}
+function renderCPrev() {
+  const v = $("cprev-range").value;
+  let text;
+  if (v === "all") text = composeWork(selWorkId);
+  else if (v === "none") text = composeChapter(selWorkId, null);
+  else text = composeChapter(selWorkId, Number(v.slice(2)));
+  $("cprev-body").textContent = text;
+  $("cprev-count").textContent = `${countChars(text).toLocaleString()} 字`;
+}
+
+/* ---- コピー3種 */
+async function copyMsText(text, what) {
+  if (!text.trim()) { toast(`${what}に本文がありません`); return; }
+  if (await copyText(text))
+    toast(`${what}（${countChars(text).toLocaleString()}字）をコピーしました`);
+  else toast("⚠ コピーできませんでした");
+}
+function copyEpisode() {
+  if (!msEditing()) return;
+  flushMs();
+  copyMsText($("ms-editor").value, "表示中の話");
+}
+function copyChapterText() {
+  if (selWorkId === null) return;
+  const chId = selectedChapterId();
+  if (chId === null) { toast("ツリーで章（または章内の話）を選択してください"); return; }
+  flushMs();
+  const ch = chaptersOf(selWorkId).find(c => c.id === chId);
+  copyMsText(composeChapter(selWorkId, chId), `章「${ch ? ch.title : ""}」`);
+}
+function copyWorkText() {
+  if (selWorkId === null) return;
+  flushMs();
+  copyMsText(composeWork(selWorkId), "作品全体");
+}
+
+/* ============================================================ プロット */
+let plotDirty = false, plotFlushTimer = null;
+const PLOT_FIELDS = { "plot-body": "body", "plot-ki": "ki", "plot-sho": "sho",
+                      "plot-ten": "ten", "plot-ketsu": "ketsu" };
+function getPlot(workId) {
+  let p = state.tables.plots.find(r => r.work_id === workId);
+  if (!p) {
+    p = { id: nextId("plots"), work_id: workId, body: "", ki: "", sho: "",
+          ten: "", ketsu: "" };
+    state.tables.plots.push(p);
+  }
+  return p;
+}
+function loadPlot() {
+  const p = getPlot(selWorkId);
+  for (const [el, key] of Object.entries(PLOT_FIELDS)) $(el).value = p[key] || "";
+  plotDirty = false;
+  $("plot-save-label").textContent = "";
+}
+function onPlotInput() {
+  plotDirty = true;
+  $("plot-save-label").textContent = "未保存…";
+  clearTimeout(plotFlushTimer);
+  plotFlushTimer = setTimeout(flushPlot, 800);
+}
+function flushPlot() {
+  clearTimeout(plotFlushTimer);
+  if (!plotDirty || selWorkId === null) return;
+  const p = getPlot(selWorkId);
+  for (const [el, key] of Object.entries(PLOT_FIELDS)) p[key] = $(el).value;
+  touchWork(selWorkId);
+  plotDirty = false;
+  saveSoon();
+  $("plot-save-label").textContent = `保存済み（${now().slice(11)}）`;
+}
+
+/* ============================================================ 登場人物 */
+let selCharId = null;
+const CHAR_FIELDS = ["age", "speech", "appearance", "personality", "background", "notes"];
+function charsOf(workId) {
+  return state.tables.characters.filter(c => c.work_id === workId)
+    .sort((a, b) => a.id - b.id);
+}
+function parseProfile(c) {
+  try { return JSON.parse(c.profile_json || "{}"); } catch (e) { return {}; }
+}
+function renderCharList() {
+  const items = charsOf(selWorkId);
+  $("char-list").innerHTML = items.map(c => `
+    <li data-id="${c.id}" class="${c.id === selCharId ? "selected" : ""}">
+      ${esc(c.name)}${c.role ? "（" + esc(c.role) + "）" : ""}</li>`).join("");
+  document.querySelectorAll("#char-list li").forEach(li =>
+    li.addEventListener("click", () => { selCharId = Number(li.dataset.id); loadChar(); renderCharList(); }));
+  if (!items.some(c => c.id === selCharId)) clearCharForm();
+}
+function clearCharForm() {
+  $("char-name").value = ""; $("char-role").value = "";
+  for (const f of CHAR_FIELDS) $("char-" + f).value = "";
+}
+function loadChar() {
+  const c = state.tables.characters.find(x => x.id === selCharId);
+  if (!c) { clearCharForm(); return; }
+  $("char-name").value = c.name;
+  $("char-role").value = c.role || "";
+  const prof = parseProfile(c);
+  for (const f of CHAR_FIELDS) $("char-" + f).value = prof[f] || "";
+}
+async function addChar() {
+  const name = await promptDialog("キャラクター名", "");
+  if (!name || !name.trim()) return;
+  selCharId = addRow("characters", {
+    work_id: selWorkId, name: name.trim(), role: "",
+    profile_json: "{}", x: null, y: null,
+  });
+  touchWork(selWorkId);
+  loadChar(); renderCharList();
+}
+function saveChar() {
+  const c = state.tables.characters.find(x => x.id === selCharId);
+  if (!c) { toast("左の一覧でキャラクターを選択してください"); return; }
+  const name = $("char-name").value.trim();
+  if (!name) { toast("名前は必須です"); return; }
+  const prof = parseProfile(c);   // 既存キー（image_mode等）を保持
+  for (const f of CHAR_FIELDS) prof[f] = $("char-" + f).value;
+  c.name = name;
+  c.role = $("char-role").value.trim();
+  c.profile_json = JSON.stringify(prof);
+  saveSoon();
+  renderCharList();
+  toast("保存しました");
+}
+
+/* ============================================================ 世界観 */
+let selWorldId = null;
+function worldOf(workId) {
+  return state.tables.worldbuilding.filter(w => w.work_id === workId)
+    .sort((a, b) => a.id - b.id);
+}
+function renderWorldList() {
+  const items = worldOf(selWorkId);
+  $("world-list").innerHTML = items.map(w => `
+    <li data-id="${w.id}" class="${w.id === selWorldId ? "selected" : ""}">
+      ${w.category ? "[" + esc(w.category) + "] " : ""}${esc(w.title)}</li>`).join("");
+  document.querySelectorAll("#world-list li").forEach(li =>
+    li.addEventListener("click", () => { selWorldId = Number(li.dataset.id); loadWorld(); renderWorldList(); }));
+  if (!items.some(w => w.id === selWorldId)) clearWorldForm();
+}
+function clearWorldForm() {
+  $("world-title").value = ""; $("world-category").value = ""; $("world-body").value = "";
+}
+function loadWorld() {
+  const w = state.tables.worldbuilding.find(x => x.id === selWorldId);
+  if (!w) { clearWorldForm(); return; }
+  $("world-title").value = w.title;
+  $("world-category").value = w.category || "";
+  $("world-body").value = w.body || "";
+}
+async function addWorld() {
+  const title = await promptDialog("設定のタイトル（例: 王都アルセリア）", "");
+  if (!title || !title.trim()) return;
+  selWorldId = addRow("worldbuilding", {
+    work_id: selWorkId, title: title.trim(), body: "", category: "",
+    created_at: now(),
+  });
+  loadWorld(); renderWorldList();
+}
+function saveWorld() {
+  const w = state.tables.worldbuilding.find(x => x.id === selWorldId);
+  if (!w) { toast("左の一覧で設定を選択してください"); return; }
+  const title = $("world-title").value.trim();
+  if (!title) { toast("タイトルは必須です"); return; }
+  w.title = title;
+  w.category = $("world-category").value.trim();
+  w.body = $("world-body").value;
+  saveSoon();
+  renderWorldList();
+  toast("保存しました");
+}
+
+/* ============================================================ 時系列 */
+function timelineOf(workId) {
+  return state.tables.timeline_events.filter(e => e.work_id === workId)
+    .sort((a, b) => (a.order_no - b.order_no) || (a.id - b.id));
+}
+let selTlId = null;
+function renderTimeline() {
+  const items = timelineOf(selWorkId);
+  const cell = (id, field, val) =>
+    `<td contenteditable="true" data-id="${id}" data-field="${field}">${esc(val)}</td>`;
+  $("tl-rows").innerHTML = items.map(e => `
+    <tr data-id="${e.id}" class="${e.id === selTlId ? "selected" : ""}">
+      ${cell(e.id, "date_text", e.date_text)}
+      ${cell(e.id, "event", e.event)}
+      ${cell(e.id, "related_chars", e.related_chars)}
+    </tr>`).join("");
+  document.querySelectorAll("#tl-rows tr").forEach(tr =>
+    tr.addEventListener("click", () => { selTlId = Number(tr.dataset.id); }));
+  document.querySelectorAll("#tl-rows td[contenteditable]").forEach(td => {
+    td.addEventListener("focus", () => { selTlId = Number(td.dataset.id); });
+    td.addEventListener("blur", () => {
+      const e = state.tables.timeline_events.find(x => x.id === Number(td.dataset.id));
+      if (e && e[td.dataset.field] !== td.textContent) {
+        e[td.dataset.field] = td.textContent;
+        saveSoon();
+      }
+    });
+  });
+}
+function addTimeline() {
+  selTlId = addRow("timeline_events", {
+    work_id: selWorkId, order_no: timelineOf(selWorkId).length + 1,
+    date_text: "", event: "", related_chars: "",
+  });
+  renderTimeline();
+  const first = document.querySelector(`#tl-rows tr[data-id="${selTlId}"] td`);
+  if (first) first.focus();
+}
+function deleteTimeline() {
+  if (selTlId === null) { toast("削除する行を選択してください"); return; }
+  delRow("timeline_events", selTlId);
+  selTlId = null;
+  renderTimeline();
+}
+function moveTimeline(delta) {
+  if (selTlId === null) return;
+  moveSibling(timelineOf(selWorkId), selTlId, delta);
+  renderTimeline();
+}
+
+/* ============================================================ 参考資料 */
+let selRefId = null;
+function refsOf(workId) {
+  return state.tables.refs.filter(r => r.work_id === workId)
+    .sort((a, b) => a.id - b.id);
+}
+function renderRefsList() {
+  const items = refsOf(selWorkId);
+  $("refs-list").innerHTML = items.map(r => `
+    <li data-id="${r.id}" class="${r.id === selRefId ? "selected" : ""}">
+      ${r.tag ? "[" + esc(r.tag) + "] " : ""}${esc(r.title)}</li>`).join("");
+  document.querySelectorAll("#refs-list li").forEach(li =>
+    li.addEventListener("click", () => { selRefId = Number(li.dataset.id); loadRef(); renderRefsList(); }));
+  if (!items.some(r => r.id === selRefId)) clearRefForm();
+}
+function clearRefForm() {
+  $("refs-title").value = ""; $("refs-tag").value = "";
+  $("refs-url").value = ""; $("refs-body").value = "";
+}
+function loadRef() {
+  const r = state.tables.refs.find(x => x.id === selRefId);
+  if (!r) { clearRefForm(); return; }
+  $("refs-title").value = r.title;
+  $("refs-tag").value = r.tag || "";
+  $("refs-url").value = r.url || "";
+  $("refs-body").value = r.body || "";
+}
+async function addRef() {
+  const title = await promptDialog("資料のタイトル", "");
+  if (!title || !title.trim()) return;
+  selRefId = addRow("refs", {
+    work_id: selWorkId, title: title.trim(), body: "", url: "", tag: "",
+  });
+  loadRef(); renderRefsList();
+}
+function saveRef() {
+  const r = state.tables.refs.find(x => x.id === selRefId);
+  if (!r) { toast("左の一覧で資料を選択してください"); return; }
+  const title = $("refs-title").value.trim();
+  if (!title) { toast("タイトルは必須です"); return; }
+  r.title = title;
+  r.tag = $("refs-tag").value.trim();
+  r.url = $("refs-url").value.trim();
+  r.body = $("refs-body").value;
+  saveSoon();
+  renderRefsList();
+  toast("保存しました");
+}
+function openRefUrl() {
+  const url = $("refs-url").value.trim();
+  if (!url) { toast("URLが入力されていません"); return; }
+  window.open(url, "_blank", "noopener");
+}
+
+/* ============================================================ ペア選択ダイアログ */
+let pairResolve = null;
+function pairDialog(title, items, aLabel, bLabel, textLabel) {
+  return new Promise(resolve => {
+    pairResolve = resolve;
+    $("pair-title").textContent = title;
+    $("pair-a-label").textContent = aLabel;
+    $("pair-b-label").textContent = bLabel;
+    $("pair-text-label").textContent = textLabel;
+    const opts = items.map(it => `<option value="${it.id}">${esc(it.name)}</option>`).join("");
+    $("pair-a").innerHTML = opts;
+    $("pair-b").innerHTML = opts;
+    if (items.length >= 2) $("pair-b").selectedIndex = 1;
+    $("pair-text").value = "";
+    $("pair-dialog").showModal();
+  });
+}
+function closePair(result) {
+  $("pair-dialog").close();
+  if (pairResolve) { pairResolve(result); pairResolve = null; }
+}
+
+/* ============================================================ SVGグラフエンジン
+   相関図・分岐マップ共通。ノードのドラッグ移動・ホイールズーム・
+   エッジ選択に対応。座標はコールバックで保存する。 */
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, children) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs || {})) e.setAttribute(k, v);
+  for (const c of children || []) e.appendChild(c);
+  return e;
+}
+
+class Graph {
+  /* opts: { svg, nodes:[{id,title,sub,color,x,y}], edges:[{id,from,to,label,arrow}],
+            onMove(id,x,y), onSelectNode(id|null), onSelectEdge(id|null),
+            defaultLayoutRadius } */
+  constructor(opts) {
+    this.svg = opts.svg;
+    this.opts = opts;
+    this.scale = 1; this.tx = 0; this.ty = 0;
+    this.selNode = null; this.selEdge = null;
+    this.nodePos = {};   // id -> {x,y}
+    this._bind();
+    this.setData(opts.nodes, opts.edges);
+  }
+  setData(nodes, edges) {
+    this.nodes = nodes; this.edges = edges;
+    const n = Math.max(nodes.length, 1);
+    nodes.forEach((nd, i) => {
+      if (nd.x == null || nd.y == null) {
+        const a = 2 * Math.PI * i / n, r = this.opts.defaultLayoutRadius || 0;
+        this.nodePos[nd.id] = { x: Math.cos(a) * r, y: Math.sin(a) * r };
+      } else {
+        this.nodePos[nd.id] = { x: nd.x, y: nd.y };
+      }
+    });
+    this.render();
+  }
+  _sizeOf(node) {
+    const w = Math.max(90, (node.title || "").length * 15 + 24);
+    const h = node.sub ? 50 : 36;
+    return { w, h };
+  }
+  render() {
+    const svg = this.svg;
+    svg.innerHTML = "";
+    const g = el("g", { transform: `translate(${this.tx},${this.ty}) scale(${this.scale})` });
+    // 矢印マーカー定義
+    const defs = el("defs");
+    defs.appendChild(el("marker", {
+      id: "arrow", viewBox: "0 0 10 10", refX: "9", refY: "5",
+      markerWidth: "7", markerHeight: "7", orient: "auto-start-reverse",
+    }, [el("path", { d: "M0,0 L10,5 L0,10 z", fill: "#909090" })]));
+    svg.appendChild(defs);
+    // エッジ
+    for (const e of this.edges) {
+      const a = this.nodePos[e.from], b = this.nodePos[e.to];
+      if (!a || !b) continue;
+      const selected = this.selEdge === e.id;
+      const hit = el("path", {
+        d: `M${a.x},${a.y} L${b.x},${b.y}`, class: "gedge-hit",
+      });
+      hit.addEventListener("mousedown", ev => { ev.stopPropagation(); this._selectEdge(e.id); });
+      const line = el("path", {
+        d: `M${a.x},${a.y} L${b.x},${b.y}`,
+        class: "gedge" + (selected ? " selected" : ""),
+      });
+      if (e.arrow) line.setAttribute("marker-end", "url(#arrow)");
+      g.appendChild(line); g.appendChild(hit);
+      if (e.label) {
+        g.appendChild(el("text", {
+          x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 4,
+          class: "gedge-label", "text-anchor": "middle",
+        }, [document.createTextNode(e.label)]));
+      }
+    }
+    // ノード
+    for (const node of this.nodes) {
+      const p = this.nodePos[node.id];
+      const { w, h } = this._sizeOf(node);
+      const selected = this.selNode === node.id;
+      const gn = el("g", {
+        class: "gnode" + (selected ? " selected" : ""),
+        transform: `translate(${p.x},${p.y})`,
+      });
+      gn.appendChild(el("rect", {
+        x: -w/2, y: -h/2, width: w, height: h, rx: 8,
+        fill: node.color, stroke: node.color,
+      }));
+      if (node.sub) {
+        gn.appendChild(el("text", { x: 0, y: -3, "text-anchor": "middle" },
+          [document.createTextNode(node.title)]));
+        gn.appendChild(el("text", { x: 0, y: 14, "text-anchor": "middle", class: "sub" },
+          [document.createTextNode(node.sub)]));
+      } else {
+        gn.appendChild(el("text", { x: 0, y: 5, "text-anchor": "middle" },
+          [document.createTextNode(node.title)]));
+      }
+      this._makeDraggable(gn, node.id);
+      g.appendChild(gn);
+    }
+    svg.appendChild(g);
+  }
+  _clientToGraph(clientX, clientY) {
+    const rect = this.svg.getBoundingClientRect();
+    return {
+      x: (clientX - rect.left - this.tx) / this.scale,
+      y: (clientY - rect.top - this.ty) / this.scale,
+    };
+  }
+  _makeDraggable(gn, id) {
+    let dragging = false, moved = false, start = null, orig = null;
+    gn.addEventListener("mousedown", ev => {
+      ev.stopPropagation();
+      dragging = true; moved = false;
+      start = this._clientToGraph(ev.clientX, ev.clientY);
+      orig = { ...this.nodePos[id] };
+      this._selectNode(id);
+    });
+    const move = ev => {
+      if (!dragging) return;
+      const cur = this._clientToGraph(ev.clientX, ev.clientY);
+      const nx = orig.x + (cur.x - start.x), ny = orig.y + (cur.y - start.y);
+      if (Math.abs(cur.x-start.x) > 2 || Math.abs(cur.y-start.y) > 2) moved = true;
+      this.nodePos[id] = { x: nx, y: ny };
+      gn.setAttribute("transform", `translate(${nx},${ny})`);
+      this._updateEdges();
+    };
+    const up = () => {
+      if (dragging && moved && this.opts.onMove) {
+        const p = this.nodePos[id];
+        this.opts.onMove(id, p.x, p.y);
+      }
+      dragging = false;
+    };
+    gn.addEventListener("mousemove", move);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+    this._cleanups = this._cleanups || [];
+    this._cleanups.push(() => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    });
+  }
+  _updateEdges() {
+    // ドラッグ中はエッジのd属性だけ更新（軽量化）
+    const paths = this.svg.querySelectorAll(".gedge, .gedge-hit");
+    let i = 0;
+    for (const e of this.edges) {
+      const a = this.nodePos[e.from], b = this.nodePos[e.to];
+      if (!a || !b) continue;
+      const d = `M${a.x},${a.y} L${b.x},${b.y}`;
+      // gedge と gedge-hit が交互に並ぶ
+      if (paths[i]) paths[i].setAttribute("d", d);
+      if (paths[i+1]) paths[i+1].setAttribute("d", d);
+      i += 2;
+    }
+    // ラベル位置も更新
+    const labels = this.svg.querySelectorAll(".gedge-label");
+    let li = 0;
+    for (const e of this.edges) {
+      if (!e.label) continue;
+      const a = this.nodePos[e.from], b = this.nodePos[e.to];
+      if (a && b && labels[li]) {
+        labels[li].setAttribute("x", (a.x + b.x) / 2);
+        labels[li].setAttribute("y", (a.y + b.y) / 2 - 4);
+      }
+      li++;
+    }
+  }
+  _selectNode(id) {
+    this.selNode = id; this.selEdge = null;
+    this.render();
+    // 選択された種別のコールバックのみ呼ぶ（相互排他は呼び出し側で担保）
+    if (this.opts.onSelectNode) this.opts.onSelectNode(id);
+  }
+  _selectEdge(id) {
+    this.selEdge = id; this.selNode = null;
+    this.render();
+    if (this.opts.onSelectEdge) this.opts.onSelectEdge(id);
+  }
+  _clearSelection() {
+    this.selNode = null; this.selEdge = null;
+    this.render();
+    if (this.opts.onSelectNode) this.opts.onSelectNode(null);
+    if (this.opts.onSelectEdge) this.opts.onSelectEdge(null);
+  }
+  _bind() {
+    // 背景ドラッグでパン、ホイールでズーム
+    let panning = false, pstart = null;
+    this.svg.addEventListener("mousedown", ev => {
+      panning = true; pstart = { x: ev.clientX - this.tx, y: ev.clientY - this.ty };
+      this.svg.classList.add("panning");
+      this._clearSelection();   // 背景クリックで全選択解除
+    });
+    window.addEventListener("mousemove", ev => {
+      if (!panning) return;
+      this.tx = ev.clientX - pstart.x; this.ty = ev.clientY - pstart.y;
+      const g = this.svg.querySelector("g");
+      if (g) g.setAttribute("transform", `translate(${this.tx},${this.ty}) scale(${this.scale})`);
+    });
+    window.addEventListener("mouseup", () => { panning = false; this.svg.classList.remove("panning"); });
+    this.svg.addEventListener("wheel", ev => {
+      ev.preventDefault();
+      const factor = ev.deltaY < 0 ? 1.12 : 1 / 1.12;
+      const rect = this.svg.getBoundingClientRect();
+      const mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+      // マウス位置を中心にズーム
+      this.tx = mx - (mx - this.tx) * factor;
+      this.ty = my - (my - this.ty) * factor;
+      this.scale *= factor;
+      const g = this.svg.querySelector("g");
+      if (g) g.setAttribute("transform", `translate(${this.tx},${this.ty}) scale(${this.scale})`);
+    }, { passive: false });
+  }
+  fit() {
+    if (!this.nodes.length) return;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const node of this.nodes) {
+      const p = this.nodePos[node.id], { w, h } = this._sizeOf(node);
+      minX = Math.min(minX, p.x - w/2); maxX = Math.max(maxX, p.x + w/2);
+      minY = Math.min(minY, p.y - h/2); maxY = Math.max(maxY, p.y + h/2);
+    }
+    const pad = 40;
+    const rect = this.svg.getBoundingClientRect();
+    const gw = maxX - minX + pad*2, gh = maxY - minY + pad*2;
+    this.scale = Math.min(rect.width / gw, rect.height / gh, 1.5);
+    this.tx = rect.width/2 - (minX + maxX)/2 * this.scale;
+    this.ty = rect.height/2 - (minY + maxY)/2 * this.scale;
+    this.render();
+  }
+  destroy() {
+    (this._cleanups || []).forEach(fn => fn());
+  }
+}
+
+/* ============================================================ 相関図 */
+const NODE_REL_COLOR = "#3f7fbf", NODE_BRANCH_COLOR = "#8e6cc0";
+let relGraph = null;
+let selRelEdge = null;
+function renderRelation() {
+  const chars = charsOf(selWorkId);
+  $("rel-empty").hidden = chars.length > 0;
+  selRelEdge = null;
+  if (relGraph) relGraph.destroy();
+  const nodes = chars.map(c => ({
+    id: c.id, title: c.name, sub: c.role || "", color: NODE_REL_COLOR,
+    x: c.x, y: c.y,
+  }));
+  const rels = state.tables.relationships.filter(r => r.work_id === selWorkId);
+  const edges = rels.map(r => ({
+    id: r.id, from: r.char_a_id, to: r.char_b_id, label: r.label, arrow: false,
+  }));
+  relGraph = new Graph({
+    svg: $("rel-svg"), nodes, edges, defaultLayoutRadius: 200,
+    onMove: (id, x, y) => {
+      const c = state.tables.characters.find(x2 => x2.id === id);
+      if (c) { c.x = x; c.y = y; saveSoon(); }
+    },
+    onSelectNode: () => { selRelEdge = null; },  // ノード選択でエッジ選択を解除
+    onSelectEdge: id => { selRelEdge = id; },
+  });
+}
+async function addRelation() {
+  const chars = charsOf(selWorkId);
+  if (chars.length < 2) { toast("関係を結ぶには登場人物が2人以上必要です"); return; }
+  const res = await pairDialog("関係を追加",
+    chars.map(c => ({ id: c.id, name: c.name })),
+    "キャラクターA", "キャラクターB", "関係ラベル（例: 親友 / 恋敵 / 兄妹）");
+  if (!res) return;
+  if (res.a === res.b) { toast("同じキャラクター同士は結べません"); return; }
+  addRow("relationships", {
+    work_id: selWorkId, char_a_id: res.a, char_b_id: res.b, label: res.text,
+  });
+  renderRelation();
+}
+async function editRelLabel() {
+  if (selRelEdge === null) { toast("変更する関係（線）をクリックで選択してください"); return; }
+  const r = state.tables.relationships.find(x => x.id === selRelEdge);
+  const label = await promptDialog("関係ラベル", r ? r.label : "");
+  if (label === null) return;
+  r.label = label.trim(); saveSoon(); renderRelation();
+}
+function deleteRel() {
+  if (selRelEdge === null) { toast("削除する関係（線）をクリックで選択してください"); return; }
+  delRow("relationships", selRelEdge); selRelEdge = null; renderRelation();
+}
+
+/* ============================================================ 作品分析（分岐） */
+let branchGraph = null;
+let selBranchNode = null, selBranchEdge = null;
+let branchNoteDirty = false;
+function branchNodesOf(workId) {
+  return state.tables.branch_nodes.filter(n => n.work_id === workId);
+}
+function renderBranch() {
+  flushBranchNote();
+  selBranchEdge = null;
+  if (branchGraph) branchGraph.destroy();
+  const nodes = branchNodesOf(selWorkId).map(n => ({
+    id: n.id, title: n.label, sub: "", color: NODE_BRANCH_COLOR, x: n.x, y: n.y,
+  }));
+  const edges = state.tables.branch_edges.filter(e => e.work_id === selWorkId)
+    .map(e => ({ id: e.id, from: e.from_node_id, to: e.to_node_id, label: e.label, arrow: true }));
+  branchGraph = new Graph({
+    svg: $("br-svg"), nodes, edges, defaultLayoutRadius: 0,
+    onMove: (id, x, y) => {
+      const n = state.tables.branch_nodes.find(n2 => n2.id === id);
+      if (n) { n.x = x; n.y = y; saveSoon(); }
+    },
+    onSelectNode: id => { setBranchNoteNode(id); selBranchEdge = null; },
+    onSelectEdge: id => { selBranchEdge = id; setBranchNoteNode(null); },
+  });
+  setBranchNoteNode(null);
+}
+function setBranchNoteNode(id) {
+  flushBranchNote();
+  selBranchNode = id;
+  branchNoteDirty = false;
+  const ta = $("branch-note");
+  if (id === null) {
+    ta.value = ""; ta.disabled = true;
+    $("br-note-title").textContent = "ノードを選択するとメモを編集できます";
+    return;
+  }
+  const n = state.tables.branch_nodes.find(x => x.id === id);
+  ta.value = n ? n.note : "";
+  ta.disabled = false;
+  $("br-note-title").textContent = `📝 ${n ? n.label : ""} のメモ`;
+}
+function onBranchNoteInput() { branchNoteDirty = true; }
+function flushBranchNote() {
+  if (!branchNoteDirty || selBranchNode === null) return;
+  const n = state.tables.branch_nodes.find(x => x.id === selBranchNode);
+  if (n) { n.note = $("branch-note").value; saveSoon(); }
+  branchNoteDirty = false;
+}
+async function addBranchNode() {
+  const label = await promptDialog("分岐の内容（例: 主人公が誘いを断ったら？）", "");
+  if (!label || !label.trim()) return;
+  const offset = branchNodesOf(selWorkId).length * 30;
+  const id = addRow("branch_nodes", {
+    work_id: selWorkId, label: label.trim(), note: "",
+    x: offset - 100, y: offset - 100,
+  });
+  renderBranch();
+  if (branchGraph) branchGraph._selectNode(id);
+}
+async function renameBranchNode() {
+  if (selBranchNode === null) { toast("変更するノードをクリックで選択してください"); return; }
+  const n = state.tables.branch_nodes.find(x => x.id === selBranchNode);
+  const label = await promptDialog("新しい内容", n ? n.label : "");
+  if (!label || !label.trim()) return;
+  n.label = label.trim(); saveSoon(); renderBranch();
+}
+function deleteBranchNode() {
+  if (selBranchNode === null) { toast("削除するノードをクリックで選択してください"); return; }
+  branchNoteDirty = false;
+  state.tables.branch_edges = state.tables.branch_edges
+    .filter(e => e.from_node_id !== selBranchNode && e.to_node_id !== selBranchNode);
+  delRow("branch_nodes", selBranchNode); selBranchNode = null; renderBranch();
+}
+async function addBranchEdge() {
+  const nodes = branchNodesOf(selWorkId);
+  if (nodes.length < 2) { toast("接続するには分岐ノードが2つ以上必要です"); return; }
+  const res = await pairDialog("接続を追加",
+    nodes.map(n => ({ id: n.id, name: n.label })),
+    "元ノード", "先ノード", "接続ラベル（例: 断る / 受ける）");
+  if (!res) return;
+  if (res.a === res.b) { toast("同じノード同士は接続できません"); return; }
+  addRow("branch_edges", {
+    work_id: selWorkId, from_node_id: res.a, to_node_id: res.b, label: res.text,
+  });
+  renderBranch();
+}
+async function editBranchEdgeLabel() {
+  if (selBranchEdge === null) { toast("変更する接続（線）をクリックで選択してください"); return; }
+  const e = state.tables.branch_edges.find(x => x.id === selBranchEdge);
+  const label = await promptDialog("接続ラベル", e ? e.label : "");
+  if (label === null) return;
+  e.label = label.trim(); saveSoon(); renderBranch();
+}
+function deleteBranchEdge() {
+  if (selBranchEdge === null) { toast("削除する接続（線）をクリックで選択してください"); return; }
+  delRow("branch_edges", selBranchEdge); selBranchEdge = null; renderBranch();
+}
+
+/* ============================================================ テーマ */
+function applyTheme(theme) {
+  if (theme === "light" || theme === "dark") {
+    document.documentElement.setAttribute("data-theme", theme);
+  } else {
+    document.documentElement.removeAttribute("data-theme");   // OS設定に追従
+  }
+}
+
+/* ============================================================ Claude連携
+   手動ハンドオフ方式: プロンプトを生成してコピー→claude.ai を開くだけ。
+   API連携・自動実行はしない。 */
+const CLAUDE_URL = "https://claude.ai/new";
+let claudeTemplates = [];
+
+function readerHead(b) {
+  const lines = [`タイトル: ${b.title}`];
+  if (b.author) lines.push(`作者: ${b.author}`);
+  if (b.source) lines.push(`掲載サイト: ${b.source}`);
+  if (b.url) lines.push(`作品URL: ${b.url}`);
+  if (b.genre) lines.push(`ジャンル: ${b.genre}`);
+  if (b.tags) lines.push(`タグ: ${b.tags}`);
+  return lines.join("\n");
+}
+function buildReaderTemplates(b) {
+  const imps = rowsFor("impressions", b.id, "created_at").slice(0, 3).map(r => r.content);
+  return [
+    {
+      name: "作品を要約",
+      options: [
+        { label: "ネタバレ", choices: ["なし", "あり"] },
+        { label: "長さ", choices: ["短め（200字程度）", "標準（400字程度）", "詳しめ（800字程度）"] },
+        { label: "観点", choices: ["あらすじ整理", "作風・テーマ", "読みどころ"] },
+      ],
+      build: o => {
+        const parts = ["以下のWeb小説を読んで要約してください。", "", readerHead(b)];
+        if (b.synopsis) parts.push("", `公式あらすじ:\n${b.synopsis}`);
+        parts.push("", "条件:");
+        parts.push(b.url
+          ? "- 上記の作品URLを開いて内容を確認した上で要約してください"
+          : "- URLが未登録のため、タイトルと公式あらすじを手掛かりにしてください");
+        parts.push(`- ネタバレ: ${o["ネタバレ"] === "あり"
+          ? "結末や核心の展開まで含めて構いません"
+          : "核心の展開や結末のネタバレは避けてください"}`);
+        parts.push(`- 長さ: ${o["長さ"]}`, `- 観点: ${o["観点"]} を中心にまとめてください`);
+        return parts.join("\n");
+      },
+    },
+    {
+      name: "感想の下書き", options: [],
+      build: () => {
+        const parts = ["以下のWeb小説について、読者としての感想文の下書きを書いてください。",
+                       "", readerHead(b)];
+        if (b.synopsis) parts.push("", `公式あらすじ:\n${b.synopsis}`);
+        if (b.summary) parts.push("", `私の要約メモ:\n${b.summary}`);
+        if (imps.length) parts.push("", `私のこれまでの感想メモ:\n${imps.join("\n---\n")}`);
+        parts.push("", "条件:", "- 私のメモの内容・温度感を尊重してください",
+          "- 自然な口語で、400字前後でお願いします", "- 過度なネタバレは避けてください");
+        return parts.join("\n");
+      },
+    },
+    {
+      name: "類似作品の提案", options: [],
+      build: () => {
+        const parts = ["以下の読書記録をもとに、似た作風のWeb小説（小説家になろう / カクヨム）を5作品ほど提案してください。",
+                       "", readerHead(b)];
+        if (b.star_rating) parts.push(`星評価: ${b.star_rating} / 5`);
+        if (b.summary) parts.push("", `私の要約メモ:\n${b.summary}`);
+        if (imps.length) parts.push("", `私の感想メモ:\n${imps[0]}`);
+        parts.push("", "条件:",
+          "- それぞれ「タイトル / 掲載サイト / おすすめ理由」を添えてください",
+          "- この作品のどこが好きかを感想メモから推測して選んでください");
+        return parts.join("\n");
+      },
+    },
+  ];
+}
+function buildWriterTemplates() {
+  const w = findWork(selWorkId);
+  const ms = currentMsId ? findMs(currentMsId) : null;
+  const plot = getPlot(selWorkId);
+  const chars = charsOf(selWorkId);
+  const bodyBlock = () => ms && ms.body
+    ? `【作品】${w.title}　【章・話】${ms.title}\n--- 本文ここから ---\n${ms.body}\n--- 本文ここまで ---`
+    : "（執筆原稿で「話」を選択してから開くと、ここに本文が入ります）";
+  return [
+    {
+      name: "この章を校正", options: [],
+      build: () => [
+        "以下は執筆中のWeb小説の一章です。誤字脱字と表現の校正をお願いします。", "",
+        "条件:",
+        "- カクヨム公式のルビ記法（漢字《ふりがな》、かな・英数が混在する親文字は先頭に｜）はそのまま保持してください",
+        "- 傍点記法（｜文字《・》）もそのまま保持してください",
+        "- 作者の文体・語り口は尊重し、明らかな誤りと読みにくい箇所のみ修正してください",
+        "- スマホでの可読性を意識した改行・空行を提案してください",
+        "- 修正後の本文は、そのまま投稿サイトにコピペできる形で全文を提示してください",
+        "- 修正箇所の一覧（before → after と理由）も最後にまとめてください", "",
+        bodyBlock(),
+      ].join("\n"),
+    },
+    {
+      name: "ルビ／傍点チェック", options: [],
+      build: () => [
+        "以下のWeb小説本文について、ルビ・傍点記法の誤りをチェックしてください。", "",
+        "チェック観点:",
+        "- ルビ記法: 漢字のみの親文字は「親文字《ふりがな》」、かな・英数・記号が混在する親文字は「｜親文字《ふりがな》」が正しい形です",
+        "- 傍点記法: 「｜文字《・》」を1文字ずつ並べる形が正しい形です",
+        "- 《》の閉じ忘れ、｜の付け忘れ・不要な｜、全角/半角の誤りを指摘してください",
+        "- 誤りごとに「該当箇所 / 正しい記法」を一覧にしてください", "",
+        bodyBlock(),
+      ].join("\n"),
+    },
+    {
+      name: "あらすじ生成", options: [],
+      build: () => {
+        const parts = ["以下のWeb小説の本文から、投稿サイト掲載用のあらすじ案を3パターン作ってください。", ""];
+        if (w.synopsis) parts.push(`現在のあらすじ:\n${w.synopsis}`, "");
+        parts.push("条件:", "- ①短め（100字程度） ②標準（300字程度） ③興味を引く煽り重視 の3案",
+          "- 読者が続きを読みたくなる引きを意識してください", "", bodyBlock());
+        return parts.join("\n");
+      },
+    },
+    {
+      name: "プロット相談", options: [],
+      build: () => {
+        const parts = ["以下は執筆中のWeb小説のプロットです。今後の展開について相談させてください。", "",
+                       `【作品】${w.title}`];
+        if (w.genre) parts.push(`ジャンル: ${w.genre}`);
+        if (w.synopsis) parts.push("", `あらすじ:\n${w.synopsis}`);
+        if (plot.body) parts.push("", `自由プロット:\n${plot.body}`);
+        parts.push("", "起承転結:",
+          `【起】${plot.ki || "（未記入）"}`, `【承】${plot.sho || "（未記入）"}`,
+          `【転】${plot.ten || "（未記入）"}`, `【結】${plot.ketsu || "（未記入）"}`);
+        parts.push("", "相談したいこと:", "- 展開の矛盾や弱い箇所があれば指摘してください",
+          "- 盛り上げるための改善案・別展開の候補を提案してください");
+        return parts.join("\n");
+      },
+    },
+    {
+      name: "キャラ設定のブラッシュアップ", options: [],
+      build: () => {
+        const parts = ["以下は執筆中のWeb小説の登場人物設定です。キャラクターをより立体的にするブラッシュアップ案をください。",
+                       "", `【作品】${w.title}`];
+        if (w.synopsis) parts.push(`あらすじ:\n${w.synopsis}`);
+        if (!chars.length) parts.push("", "（登場人物が未登録です。「👥 登場人物」で追加してから開いてください）");
+        for (const c of chars) {
+          parts.push("", `■ ${c.name}` + (c.role ? `（${c.role}）` : ""));
+          const p = parseProfile(c);
+          const labels = [["年齢","age"],["口調・一人称","speech"],["容姿","appearance"],
+                          ["性格","personality"],["背景設定","background"],["備考","notes"]];
+          for (const [label, key] of labels) if (p[key]) parts.push(`- ${label}: ${p[key]}`);
+        }
+        parts.push("", "条件:",
+          "- 各キャラの矛盾・薄い部分を指摘し、深掘り案（過去・動機・癖など）を提案してください",
+          "- キャラ同士の関係性で面白くできる組み合わせも挙げてください");
+        return parts.join("\n");
+      },
+    },
+  ];
+}
+function openClaudeDialog(templates) {
+  claudeTemplates = templates;
+  $("claude-template").innerHTML =
+    templates.map((t, i) => `<option value="${i}">${esc(t.name)}</option>`).join("");
+  renderClaudeOptions();
+  $("claude-dialog").showModal();
+}
+function renderClaudeOptions() {
+  const t = claudeTemplates[Number($("claude-template").value) || 0];
+  $("claude-options").innerHTML = (t.options || []).map(o => `
+    <div class="form-row"><label>${esc(o.label)}</label>
+      <select data-opt="${esc(o.label)}">
+        ${o.choices.map(c => `<option>${esc(c)}</option>`).join("")}
+      </select></div>`).join("");
+  document.querySelectorAll("#claude-options select").forEach(sel =>
+    sel.addEventListener("change", buildClaudePrompt));
+  buildClaudePrompt();
+}
+function buildClaudePrompt() {
+  const t = claudeTemplates[Number($("claude-template").value) || 0];
+  const opts = {};
+  document.querySelectorAll("#claude-options select").forEach(sel => {
+    opts[sel.dataset.opt] = sel.value;
+  });
+  $("claude-prompt").value = t.build(opts);
+}
+async function copyAndOpenClaude() {
+  const text = $("claude-prompt").value.trim();
+  if (!text) { toast("プロンプトが空です"); return; }
+  const ok = await copyText(text);
+  $("claude-dialog").close();
+  window.open(CLAUDE_URL, "_blank", "noopener");
+  toast(ok ? "プロンプトをコピーしました。Claudeに貼り付けてください"
+           : "⚠ コピーできませんでした（手動でコピーしてください）");
+}
+function sendReaderToClaude() {
+  if (selectedBookId === null) { toast("一覧から作品を選択してください"); return; }
+  const b = findBook(selectedBookId);
+  if (!b) return;
+  openClaudeDialog(buildReaderTemplates(b));
+}
+function sendWriterToClaude() {
+  if (selWorkId === null) { toast("左のリストで自作品を選択してください"); return; }
+  flushMs(); flushPlot();
+  openClaudeDialog(buildWriterTemplates());
+}
+
+/* ============================================================ モード切替 */
+function switchMode(mode) {
+  flushMs();  // 作者モードを離れる前に原稿を保存
+  flushPlot();
+  flushBranchNote();
+  $("view-reader").hidden = mode !== "reader";
+  $("view-writer").hidden = mode !== "writer";
+  $("btn-mode-reader").classList.toggle("active", mode === "reader");
+  $("btn-mode-writer").classList.toggle("active", mode === "writer");
+  if (mode === "writer") {
+    renderWorks();
+    if (selWorkId === null) showWView("hint");
+  }
+  try { localStorage.setItem("yomikaki-web-mode", mode); } catch (e) {}
+}
+
+/* ============================================================ バックアップ */
+function exportJson() {
+  const data = {
+    app: "yomikaki", schema_version: SCHEMA_VERSION,
+    exported_at: now(), tables: state.tables,
+  };
+  const stamp = now().replace(/[- :]/g, "").slice(0, 14);
+  const blob = new Blob([JSON.stringify(data, null, 2)],
+                        { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `yomikaki_backup_${stamp}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  const total = TABLES.reduce((n, t) => n + state.tables[t].length, 0);
+  toast(`全 ${total} 件をエクスポートしました（exe版でそのまま復元できます）`);
+}
+/* テーブルごとの外部キー定義（マージ時のID付け替え用。exe版 backup.py と同じ） */
+const FK_MAP = {
+  bookmarks: { book_id: "books" },
+  impressions: { book_id: "books" },
+  quotes: { book_id: "books" },
+  reading_schedule: { book_id: "books" },
+  chapters: { work_id: "works" },
+  manuscripts: { work_id: "works", chapter_id: "chapters" },
+  plots: { work_id: "works" },
+  characters: { work_id: "works" },
+  timeline_events: { work_id: "works" },
+  refs: { work_id: "works" },
+  worldbuilding: { work_id: "works" },
+  relationships: { work_id: "works", char_a_id: "characters", char_b_id: "characters" },
+  branch_nodes: { work_id: "works" },
+  branch_edges: { work_id: "works", from_node_id: "branch_nodes", to_node_id: "branch_nodes" },
+};
+/* NOT NULL の外部キー（解決できない場合は行ごと除外する） */
+const REQUIRED_FK = {
+  bookmarks: ["book_id"], impressions: ["book_id"], quotes: ["book_id"],
+  reading_schedule: ["book_id"], chapters: ["work_id"], manuscripts: ["work_id"],
+  plots: ["work_id"], characters: ["work_id"], timeline_events: ["work_id"],
+  refs: ["work_id"], worldbuilding: ["work_id"],
+  relationships: ["work_id", "char_a_id", "char_b_id"],
+  branch_nodes: ["work_id"],
+  branch_edges: ["work_id", "from_node_id", "to_node_id"],
+};
+
+function mergeTables(incoming) {
+  const idMaps = {};   // table -> {oldId: newId}
+  let added = 0;
+  for (const table of TABLES) {
+    idMaps[table] = {};
+    const fks = FK_MAP[table] || {};
+    const required = REQUIRED_FK[table] || [];
+    for (const row of incoming[table] || []) {
+      const oldId = row.id;
+      const newRow = { ...row };
+      delete newRow.id;
+      let skip = false;
+      for (const [col, refTable] of Object.entries(fks)) {
+        const v = newRow[col];
+        if (v == null) continue;
+        const mapped = idMaps[refTable] ? idMaps[refTable][v] : undefined;
+        if (mapped === undefined) {
+          if (required.includes(col)) { skip = true; break; }
+          newRow[col] = null;
+        } else {
+          newRow[col] = mapped;
+        }
+      }
+      if (skip) continue;
+      newRow.id = nextId(table);
+      state.tables[table].push(newRow);
+      if (oldId != null) idMaps[table][oldId] = newRow.id;
+      added++;
+    }
+  }
+  return added;
+}
+
+function runImport(text, mode = "replace") {
+  let data;
+  try { data = JSON.parse(text); }
+  catch (e) { toast("⚠ JSONとして読み込めませんでした"); return false; }
+  if (!data || data.app !== "yomikaki" || !data.tables) {
+    toast("⚠ yomikaki のバックアップではありません"); return false;
+  }
+  if ((data.schema_version || 0) > SCHEMA_VERSION) {
+    toast(`⚠ バックアップ（v${data.schema_version}）が新しすぎます`); return false;
+  }
+  let addedCount = null;
+  if (mode === "merge") {
+    addedCount = mergeTables(Object.assign(emptyTables(), data.tables));
+  } else {
+    state = { schema_version: SCHEMA_VERSION,
+              tables: Object.assign(emptyTables(), data.tables) };
+  }
+  saveSoon();
+  window.__importAdded = addedCount;   // 完了メッセージ用
+  selWorkId = null; selNode = null; currentMsId = null; msDirty = false;
+  plotDirty = false; branchNoteDirty = false;
+  selCharId = selWorldId = selTlId = selRefId = null;
+  selRelEdge = selBranchNode = selBranchEdge = null;
+  loadEditor(null);
+  renderWorks(); renderTree();
+  showWView("hint");
+  startNew();
+  const total = TABLES.reduce((n, t) => n + (state.tables[t] || []).length, 0);
+  toast(addedCount === null
+    ? `全 ${total} 件をインポートしました（上書き）`
+    : `${addedCount} 件を追加しました（マージ後の合計 ${total} 件）`);
+  return true;
+}
+
+/* ============================================================ 初期化 */
+async function init() {
+  await loadState();
+  $("btn-mode-reader").addEventListener("click", () => switchMode("reader"));
+  $("btn-mode-writer").addEventListener("click", () => switchMode("writer"));
+  $("btn-new").addEventListener("click", startNew);
+  $("btn-save").addEventListener("click", saveForm);
+  $("btn-delete").addEventListener("click", () =>
+    twoStep($("btn-delete"), "⚠ もう一度押すと削除（感想等も消えます）", () => {
+      if (selectedBookId !== null) { deleteBook(selectedBookId); startNew(); toast("削除しました"); }
+    }));
+  for (const f of ["search", "f-source", "f-genre", "f-status"])
+    $(f).addEventListener("input", renderList);
+  document.querySelectorAll(".reader-tabs button").forEach(btn =>
+    btn.addEventListener("click", () => switchReaderTab(btn.dataset.rtab)));
+
+  // カレンダー
+  $("cal-prev").addEventListener("click", () => {
+    calCursor.setMonth(calCursor.getMonth() - 1); renderCalendar();
+  });
+  $("cal-next").addEventListener("click", () => {
+    calCursor.setMonth(calCursor.getMonth() + 1); renderCalendar();
+  });
+  $("cal-today-btn").addEventListener("click", () => {
+    calCursor = new Date(); calCursor.setDate(1);
+    selectedDate = fmtDate(new Date());
+    renderCalendar(); renderDayPanel();
+  });
+  $("btn-sched-add").addEventListener("click", addSched);
+
+  // 引用・語彙帳
+  for (const f of ["q-search", "q-category"])
+    $(f).addEventListener("input", renderQuotesPage);
+  $("btn-q-copy").addEventListener("click", copyQuotePage);
+  $("btn-q-del").addEventListener("click", () =>
+    twoStep($("btn-q-del"), "⚠ もう一度押すと削除", () => {
+      if (selQPageId !== null) {
+        delRow("quotes", selQPageId); selQPageId = null;
+        renderQuotesPage(); renderQuotes();
+      }
+    }));
+  document.querySelectorAll("th[data-sort]").forEach(th =>
+    th.addEventListener("click", () => {
+      const key = th.dataset.sort;
+      if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = -1; }
+      renderList();
+    }));
+
+  document.querySelectorAll("#detail-tabs button").forEach(btn =>
+    btn.addEventListener("click", () => showTab(btn.dataset.tab)));
+  $("in-source").addEventListener("change", updateGenreDatalist);
+  $("in-star").addEventListener("input", () =>
+    $("star-display").textContent = starText(Number($("in-star").value) || 0));
+
+  $("btn-imp-add").addEventListener("click", addImp);
+  $("btn-imp-del").addEventListener("click", () =>
+    twoStep($("btn-imp-del"), "⚠ もう一度押すと削除", () => {
+      if (selImpId !== null) { delRow("impressions", selImpId); selImpId = null; renderImps(); }
+    }));
+  $("btn-bm-add").addEventListener("click", addBm);
+  $("btn-bm-del").addEventListener("click", () =>
+    twoStep($("btn-bm-del"), "⚠ もう一度押すと削除", () => {
+      if (selBmId !== null) { delRow("bookmarks", selBmId); selBmId = null; renderBms(); renderList(); }
+    }));
+  $("btn-quote-add").addEventListener("click", addQuote);
+  $("btn-quote-copy").addEventListener("click", copyQuote);
+  $("btn-quote-del").addEventListener("click", () =>
+    twoStep($("btn-quote-del"), "⚠ もう一度押すと削除", () => {
+      if (selQuoteId !== null) { delRow("quotes", selQuoteId); selQuoteId = null; renderQuotes(); }
+    }));
+
+  // 作者モード
+  $("btn-work-add").addEventListener("click", addWork);
+  $("btn-work-del").addEventListener("click", () =>
+    twoStep($("btn-work-del"), "⚠ もう一度押すと削除（章・原稿等も消えます）", () => {
+      if (selWorkId === null) { toast("削除する作品を選択してください"); return; }
+      deleteWorkCascade(selWorkId);
+      selWorkId = null; selNode = null;
+      loadEditor(null);
+      renderWorks(); renderTree();
+      showWView("hint");
+      toast("削除しました");
+    }));
+  document.querySelectorAll("#w-toolbar button[data-wview]").forEach(btn =>
+    btn.addEventListener("click", () => {
+      if (selWorkId === null) { toast("先に作品を選択してください"); return; }
+      showWView(btn.dataset.wview);
+    }));
+  $("btn-w-save").addEventListener("click", saveWInfo);
+  $("btn-ch-add").addEventListener("click", addChapter);
+  $("btn-ep-add").addEventListener("click", addEpisode);
+  $("btn-node-rename").addEventListener("click", renameNode);
+  $("btn-node-del").addEventListener("click", () =>
+    twoStep($("btn-node-del"), "⚠ もう一度で削除", deleteNode));
+  $("btn-node-up").addEventListener("click", () => moveNode(-1));
+  $("btn-node-down").addEventListener("click", () => moveNode(+1));
+  $("ms-editor").addEventListener("input", onMsInput);
+  window.addEventListener("beforeunload", () => { flushMs(); flushPlot(); flushBranchNote(); });
+
+  // 執筆支援ツールバー
+  document.querySelectorAll(".ms-tools button[data-insert]").forEach(btn =>
+    btn.addEventListener("click", () =>
+      insertSnippet(btn.dataset.insert, Number(btn.dataset.back))));
+  $("btn-ms-ruby").addEventListener("click", applyRuby);
+  $("btn-ms-boten").addEventListener("click", applyBoten);
+  $("btn-ms-register").addEventListener("click", openRegisterDialog);
+  document.querySelectorAll(".ms-tools button[data-spacing]").forEach(btn =>
+    btn.addEventListener("click", () => applyLineSpacing(Number(btn.dataset.spacing))));
+  $("btn-ms-vprev").addEventListener("click", openVPrev);
+  $("btn-ms-cprev").addEventListener("click", openCPrev);
+  $("btn-ms-copy-ep").addEventListener("click", copyEpisode);
+  $("btn-ms-copy-ch").addEventListener("click", copyChapterText);
+  $("btn-ms-copy-all").addEventListener("click", copyWorkText);
+
+  // ルビ・登録・プレビューダイアログ
+  $("ruby-base").addEventListener("input", validateRuby);
+  $("ruby-kana").addEventListener("input", validateRuby);
+  $("ruby-kana").addEventListener("keydown", ev => {
+    if (ev.key === "Enter" && !$("ruby-ok").disabled) { ev.preventDefault(); confirmRuby(); }
+  });
+  $("ruby-ok").addEventListener("click", confirmRuby);
+  $("ruby-cancel").addEventListener("click", () => $("ruby-dialog").close());
+  $("register-target").addEventListener("change", updateRegisterLabel);
+  $("register-ok").addEventListener("click", doRegister);
+  $("register-cancel").addEventListener("click", () => $("register-dialog").close());
+  $("vprev-close").addEventListener("click", () => $("vprev-dialog").close());
+  $("cprev-range").addEventListener("change", renderCPrev);
+  $("cprev-close").addEventListener("click", () => $("cprev-dialog").close());
+
+  // 字下げチェックの状態を記憶
+  try {
+    $("ms-indent").checked = localStorage.getItem("yomikaki-web-indent") === "1";
+  } catch (e) {}
+  $("ms-indent").addEventListener("change", () => {
+    try { localStorage.setItem("yomikaki-web-indent", $("ms-indent").checked ? "1" : "0"); } catch (e) {}
+  });
+
+  // F1〜F6ショートカット（エディタにフォーカスがあるときだけ）
+  $("ms-editor").addEventListener("keydown", ev => {
+    const map = { F1: () => insertSnippet("「」", 1), F2: () => insertSnippet("……", 0),
+      F3: () => insertSnippet("――", 0), F4: () => insertSnippet("　", 0),
+      F5: applyRuby, F6: applyBoten };
+    if (map[ev.key]) { ev.preventDefault(); map[ev.key](); }
+  });
+
+  // プロット
+  for (const el of Object.keys(PLOT_FIELDS))
+    $(el).addEventListener("input", onPlotInput);
+
+  // 登場人物
+  $("btn-char-add").addEventListener("click", addChar);
+  $("btn-char-save").addEventListener("click", saveChar);
+  $("btn-char-del").addEventListener("click", () =>
+    twoStep($("btn-char-del"), "⚠ もう一度で削除", () => {
+      if (selCharId === null) { toast("削除するキャラクターを選択してください"); return; }
+      state.tables.relationships = state.tables.relationships
+        .filter(r => r.char_a_id !== selCharId && r.char_b_id !== selCharId);
+      delRow("characters", selCharId); selCharId = null;
+      clearCharForm(); renderCharList();
+    }));
+
+  // 世界観
+  $("btn-world-add").addEventListener("click", addWorld);
+  $("btn-world-save").addEventListener("click", saveWorld);
+  $("btn-world-del").addEventListener("click", () =>
+    twoStep($("btn-world-del"), "⚠ もう一度で削除", () => {
+      if (selWorldId === null) { toast("削除する設定を選択してください"); return; }
+      delRow("worldbuilding", selWorldId); selWorldId = null;
+      clearWorldForm(); renderWorldList();
+    }));
+
+  // 時系列
+  $("btn-tl-add").addEventListener("click", addTimeline);
+  $("btn-tl-del").addEventListener("click", () =>
+    twoStep($("btn-tl-del"), "⚠ もう一度で削除", deleteTimeline));
+  $("btn-tl-up").addEventListener("click", () => moveTimeline(-1));
+  $("btn-tl-down").addEventListener("click", () => moveTimeline(+1));
+
+  // 参考資料
+  $("btn-refs-add").addEventListener("click", addRef);
+  $("btn-refs-save").addEventListener("click", saveRef);
+  $("btn-refs-open").addEventListener("click", openRefUrl);
+  $("btn-refs-del").addEventListener("click", () =>
+    twoStep($("btn-refs-del"), "⚠ もう一度で削除", () => {
+      if (selRefId === null) { toast("削除する資料を選択してください"); return; }
+      delRow("refs", selRefId); selRefId = null;
+      clearRefForm(); renderRefsList();
+    }));
+
+  // ペア選択ダイアログ
+  $("pair-ok").addEventListener("click", () => closePair({
+    a: Number($("pair-a").value), b: Number($("pair-b").value),
+    text: $("pair-text").value.trim(),
+  }));
+  $("pair-cancel").addEventListener("click", () => closePair(null));
+  $("pair-dialog").addEventListener("close", () => {
+    if (pairResolve) { pairResolve(null); pairResolve = null; }
+  });
+
+  // 相関図
+  $("btn-rel-add").addEventListener("click", addRelation);
+  $("btn-rel-label").addEventListener("click", editRelLabel);
+  $("btn-rel-del").addEventListener("click", () =>
+    twoStep($("btn-rel-del"), "⚠ もう一度で削除", deleteRel));
+  $("btn-rel-fit").addEventListener("click", () => relGraph && relGraph.fit());
+
+  // 作品分析（分岐）
+  $("btn-br-add-node").addEventListener("click", addBranchNode);
+  $("btn-br-rename").addEventListener("click", renameBranchNode);
+  $("btn-br-del-node").addEventListener("click", () =>
+    twoStep($("btn-br-del-node"), "⚠ もう一度で削除", deleteBranchNode));
+  $("btn-br-add-edge").addEventListener("click", addBranchEdge);
+  $("btn-br-edge-label").addEventListener("click", editBranchEdgeLabel);
+  $("btn-br-del-edge").addEventListener("click", () =>
+    twoStep($("btn-br-del-edge"), "⚠ もう一度で削除", deleteBranchEdge));
+  $("btn-br-fit").addEventListener("click", () => branchGraph && branchGraph.fit());
+  $("branch-note").addEventListener("input", onBranchNoteInput);
+
+  // 汎用入力ダイアログ
+  $("prompt-ok").addEventListener("click", () => closePrompt($("prompt-input").value));
+  $("prompt-cancel").addEventListener("click", () => closePrompt(null));
+  $("prompt-input").addEventListener("keydown", ev => {
+    if (ev.key === "Enter") { ev.preventDefault(); closePrompt($("prompt-input").value); }
+  });
+  $("prompt-dialog").addEventListener("close", () => {
+    if (promptResolve) { promptResolve(null); promptResolve = null; }
+  });
+
+  $("btn-export").addEventListener("click", exportJson);
+  $("btn-import").addEventListener("click", () => {
+    $("import-text").value = "";
+    $("import-file").value = "";
+    $("import-dialog").showModal();
+  });
+  $("btn-import-cancel").addEventListener("click", () => $("import-dialog").close());
+  $("btn-import-run").addEventListener("click", async () => {
+    const file = $("import-file").files[0];
+    const text = file ? await file.text() : $("import-text").value.trim();
+    if (!text) { toast("ファイルを選ぶかJSONを貼り付けてください"); return; }
+    if (runImport(text, $("import-mode").value)) $("import-dialog").close();
+  });
+  $("import-mode").addEventListener("change", () => {
+    $("import-warn").textContent = $("import-mode").value === "merge"
+      ? "現在のデータは残り、バックアップの全件が新規として追加されます（IDは自動で振り直されます）。"
+      : "⚠ 上書きすると現在の全データが失われます。必要なら先にエクスポートで控えを取ってください。";
+  });
+
+  // Claude連携
+  $("btn-reader-claude").addEventListener("click", sendReaderToClaude);
+  $("btn-writer-claude").addEventListener("click", sendWriterToClaude);
+  $("claude-template").addEventListener("change", renderClaudeOptions);
+  $("claude-regen").addEventListener("click", buildClaudePrompt);
+  $("claude-copy").addEventListener("click", copyAndOpenClaude);
+  $("claude-cancel").addEventListener("click", () => $("claude-dialog").close());
+
+  // テーマ切替（ライト → ダーク → OS設定に追従 の順で巡回）
+  $("btn-theme").addEventListener("click", () => {
+    const cur = document.documentElement.getAttribute("data-theme");
+    const next = cur === "light" ? "dark" : cur === "dark" ? null : "light";
+    applyTheme(next);
+    try {
+      if (next) localStorage.setItem("yomikaki-web-theme", next);
+      else localStorage.removeItem("yomikaki-web-theme");
+    } catch (e) {}
+    toast(next === "light" ? "ライトテーマ" : next === "dark" ? "ダークテーマ" : "OS設定に追従");
+  });
+  try {
+    applyTheme(localStorage.getItem("yomikaki-web-theme"));
+  } catch (e) {}
+
+  let mode = "reader";
+  try { mode = localStorage.getItem("yomikaki-web-mode") || "reader"; } catch (e) {}
+  switchMode(mode);
+  startNew();
+}
+init();
+
+/* PWA: Service Worker 登録（file:// で開いた場合はスキップ） */
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {
+      /* 登録失敗してもアプリ本体は動くため握りつぶす */
+    });
+  });
+}
+</script>
+</body>
+</html>

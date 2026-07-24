@@ -1,0 +1,26 @@
+{
+  "name": "yomikaki — 読書・執筆 総合管理",
+  "short_name": "yomikaki",
+  "description": "Web小説の読書記録と執筆管理を1つにまとめたアプリ（完全ローカル動作）",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f5f7",
+  "theme_color": "#3f7fbf",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

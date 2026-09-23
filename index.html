@@ -256,6 +256,7 @@ ul.mstree li.ep-child { padding-left: 24px; }
 ul.mstree li:hover { background: var(--row-hover); }
 ul.mstree li.selected { background: var(--row-selected); }
 .tree-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.done-badge { color: #d32f2f; font-weight: bold; margin-right: 4px; }
 .tree-btns button { padding: 5px 8px; font-size: 12px; }
 .ms-status { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
 .ms-status .count { font-weight: bold; font-size: 15px; }
@@ -268,9 +269,42 @@ ul.mstree li.selected { background: var(--row-selected); }
 #w-toolbar { margin-bottom: 12px; }
 .ms-tools { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
 .ms-tools button { padding: 5px 9px; font-size: 13px; }
+.ms-tools button.active { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
 .ms-tools .sep { width: 1px; align-self: stretch; background: var(--border); margin: 2px 4px; }
 .ms-tools .grp-label { color: var(--muted); font-size: 12px; }
 .ms-hint { color: var(--muted); font-size: 11px; margin-top: 4px; }
+
+/* 音声入力 */
+#btn-ms-voice.recording {
+  background: var(--danger); color: #fff; border-color: var(--danger);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+.voice-panel {
+  display: none; margin-top: 6px; padding: 8px 10px;
+  border: 1px solid var(--accent); border-radius: 8px; background: var(--panel);
+}
+.voice-panel.on { display: block; }
+.voice-buffer {
+  min-height: 40px; padding: 6px 8px; margin: 6px 0;
+  border: 1px dashed var(--border); border-radius: 6px;
+  font-size: 14px; white-space: pre-wrap;
+}
+.voice-buffer:empty::after {
+  content: "話してください…（認識した文がここに入ります）";
+  color: var(--muted); font-size: 12px;
+}
+.voice-buffer .interim { color: var(--muted); }
+.voice-keys { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.voice-keys .hint { margin-left: auto; }
+
+/* 登場人物の自由項目 */
+.custom-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: flex-start; }
+.custom-row .clabel { flex: 0 0 130px; }
+.custom-row .cvalue { flex: 1; }
+.custom-row .cdel { flex: 0 0 auto; width: auto; color: var(--danger); }
+#char-custom:empty + #btn-char-custom-add,
+#char-custom { margin-bottom: 6px; }
 
 /* 縦書きプレビュー */
 .tategaki {
@@ -418,6 +452,7 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
     <div class="list-actions">
       <button id="btn-new" class="primary">＋ 新規追加</button>
       <button id="btn-reader-claude">🤖 Claudeに送る</button>
+      <button id="btn-reader-chatgpt">💬 ChatGPTに送る</button>
       <span class="count-label" id="count-label"></span>
     </div>
   </div>
@@ -579,6 +614,7 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
     <div class="form-actions">
       <button id="btn-work-add" class="primary">＋ 新規作品</button>
       <button id="btn-work-del" class="danger-2">🗑 削除</button>
+      <button id="btn-work-complete" title="完結した作品にはリストに赤い「完」が付きます（いつでも戻せます）">🏁 完結にする</button>
     </div>
   </div>
 
@@ -594,6 +630,7 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
       <button data-wview="refs">📚 参考資料</button>
       <button data-wview="branch">🌳 作品分析</button>
       <button id="btn-writer-claude" style="margin-left:auto">🤖 Claudeに送る</button>
+      <button id="btn-writer-chatgpt">💬 ChatGPTに送る</button>
     </div>
 
     <div id="wv-hint" class="placeholder">
@@ -618,6 +655,7 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
           <div class="tree-btns">
             <button id="btn-ch-add">📂 章を追加</button>
             <button id="btn-ep-add">📄 話を追加</button>
+            <button id="btn-short-add" title="章と話を作らずに、すぐ本文を書ける1本を追加します（読み切り向け）">📝 短編を追加</button>
             <button id="btn-node-rename">名称変更</button>
             <button id="btn-node-del" class="danger-2">削除</button>
             <button id="btn-node-up">↑</button>
@@ -631,20 +669,40 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
             <span class="savelabel" id="ms-save-label"></span>
           </div>
           <textarea id="ms-editor" disabled
-            placeholder="左のツリーで「話」を選ぶと執筆できます。&#10;ルビはカクヨム記法（漢字《ふりがな》、区切りは｜）のまま書けます。"></textarea>
+            placeholder="左のツリーで「話」を選ぶと執筆できます。&#10;読み切りなら「📝 短編を追加」で、章も話も作らずすぐ書けます。&#10;ルビはカクヨム記法（漢字《ふりがな》、区切りは｜）のまま書けます。"></textarea>
           <div class="ms-tools">
-            <button data-insert="「」" data-back="1">「」(F1)</button>
+            <button data-insert="「」" data-back="1" data-newpara="1" title="書きかけの行があれば自動で改行します">「」(F1)</button>
             <button data-insert="……" data-back="0">……(F2)</button>
             <button data-insert="――" data-back="0">――(F3)</button>
-            <button data-insert="　" data-back="0">　字下げ(F4)</button>
+            <button data-insert="　" data-back="0" data-newpara="1" title="書きかけの行があれば自動で改行します">　字下げ(F4)</button>
             <span class="sep"></span>
             <button id="btn-ms-ruby">ルビ(F5)</button>
             <button id="btn-ms-boten">傍点(F6)</button>
+            <button id="btn-ms-dakuten" title="選択した各文字に濁点を付けます（例: あ → あ゙）">濁点</button>
+            <button id="btn-ms-handakuten" title="選択した各文字に半濁点を付けます（例: あ → あ゚）">半濁点</button>
+            <button id="btn-ms-divider" title="場面転換の区切り線を、前後を1行空けて挿入します">◇◇◇ 区切り線(F7)</button>
             <span class="sep"></span>
             <button id="btn-ms-register">📚 選択を登録 ▾</button>
+            <button id="btn-ms-voice" title="PCのマイクで口述筆記します">🎤 音声入力</button>
+          </div>
+          <div class="voice-panel" id="voice-panel">
+            <div class="voice-keys">
+              <strong>🎤 音声入力中</strong>
+              <button id="btn-voice-talk">「」会話を確定 (F9)</button>
+              <button id="btn-voice-narration">　地の文を確定 (F10)</button>
+              <button id="btn-voice-clear">未確定を破棄 (Esc)</button>
+              <button id="btn-voice-diag" title="音声入力が動かないときに原因を調べます">🔍 診断</button>
+              <span class="hint" id="voice-status"></span>
+            </div>
+            <div class="voice-buffer" id="voice-buffer"></div>
+            <div class="ms-hint">
+              話し終えたら F9 で「」に入れて改行、F10 で字下げして改行します。
+              マイクは自動で続きます（停止は「🎤 音声入力」をもう一度）。
+            </div>
           </div>
           <div class="ms-tools">
             <button id="btn-ms-vprev">👁 縦書きプレビュー</button>
+            <button id="btn-ms-eprev" title="表示中の話を横書きで読み返します">📄 選択話プレビュー</button>
             <button id="btn-ms-cprev">📖 章・全体プレビュー</button>
             <span class="sep"></span>
             <button id="btn-ms-copy-ep">📋 この話をコピー</button>
@@ -656,6 +714,7 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
             <button data-spacing="1">改行なし</button>
             <button data-spacing="2">2改行</button>
             <button data-spacing="3">3改行</button>
+            <button data-spacing="4">4改行</button>
             <label style="display:flex;align-items:center;gap:4px;width:auto">
               <input type="checkbox" id="ms-indent" style="width:auto"> 地の文を字下げ
             </label>
@@ -669,14 +728,29 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
     <div id="wv-plot" hidden>
       <div class="form-row" style="margin-bottom:4px">
         <label>自由プロット（構想・メモを自由に）<span class="savelabel-inline" id="plot-save-label"></span></label>
-        <textarea id="plot-body" rows="6" placeholder="物語の全体構想、伏線メモ、テーマなど"></textarea>
+        <textarea id="plot-body" rows="6" placeholder="物語の全体構想、テーマなど"></textarea>
       </div>
-      <div class="kishoten">
+      <div class="ms-tools" style="margin-top:0">
+        <span class="grp-label">構成：</span>
+        <button data-structure="kishotenketsu" id="struct-ksk">起承転結</button>
+        <button data-structure="johakyu" id="struct-jhk">序破急</button>
+      </div>
+      <div class="kishoten" id="plot-boxes-ksk">
         <div class="ks-box ks-ki"><label>起</label><textarea id="plot-ki" placeholder="「起」の構成メモ"></textarea></div>
         <div class="ks-box ks-sho"><label>承</label><textarea id="plot-sho" placeholder="「承」の構成メモ"></textarea></div>
         <div class="ks-box ks-ten"><label>転</label><textarea id="plot-ten" placeholder="「転」の構成メモ"></textarea></div>
         <div class="ks-box ks-ketsu"><label>結</label><textarea id="plot-ketsu" placeholder="「結」の構成メモ"></textarea></div>
       </div>
+      <div class="kishoten" id="plot-boxes-jhk" style="grid-template-columns:1fr 1fr 1fr" hidden>
+        <div class="ks-box ks-ki"><label>序</label><textarea id="plot-jo" placeholder="「序」の構成メモ"></textarea></div>
+        <div class="ks-box ks-ten"><label>破</label><textarea id="plot-ha" placeholder="「破」の構成メモ"></textarea></div>
+        <div class="ks-box ks-ketsu"><label>急</label><textarea id="plot-kyu" placeholder="「急」の構成メモ"></textarea></div>
+      </div>
+      <div class="ms-tools" style="margin-top:14px">
+        <span class="grp-label">伏線と伏線回収</span>
+        <button id="btn-fore-add" style="width:auto">＋ 伏線を追加</button>
+      </div>
+      <div id="plot-fore"></div>
     </div>
 
     <!-- 登場人物 -->
@@ -692,6 +766,10 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
         </div>
         <div class="body">
           <div class="form-row"><label>名前 *</label><input id="char-name"></div>
+          <div class="form-row"><label>読み方（フリガナ）</label>
+            <input id="char-reading" placeholder="例: さとうたろう（PC版でルビに使えます）"></div>
+          <div class="form-row"><label>別称・ニックネーム</label>
+            <input id="char-aliases" placeholder="例: タロちゃん, 勇者様（カンマ区切り）"></div>
           <div class="form-row"><label>役割</label>
             <input id="char-role" list="role-list">
             <datalist id="role-list">
@@ -707,6 +785,9 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
           <div class="form-row"><label>性格</label><textarea id="char-personality" rows="2"></textarea></div>
           <div class="form-row"><label>背景設定</label><textarea id="char-background" rows="3"></textarea></div>
           <div class="form-row"><label>備考</label><textarea id="char-notes" rows="2"></textarea></div>
+          <label class="hint">自由項目（特技・生い立ちなど）</label>
+          <div id="char-custom"></div>
+          <button id="btn-char-custom-add" style="width:auto">＋ 項目を追加</button>
           <div class="form-actions"><button id="btn-char-save" class="primary">💾 保存</button></div>
         </div>
       </div>
@@ -770,6 +851,10 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
         </div>
         <div class="body">
           <div class="form-row"><label>タイトル *</label><input id="refs-title"></div>
+          <div class="form-row"><label>フォルダ</label>
+            <input id="refs-folder" list="refs-folder-list" placeholder="フォルダ名（空欄なら未分類）">
+            <datalist id="refs-folder-list"></datalist>
+          </div>
           <div class="form-row"><label>タグ</label><input id="refs-tag" placeholder="カテゴリタグ（例: 世界観, 武器, 食文化）"></div>
           <div class="form-row"><label>URL</label>
             <div class="subrow">
@@ -778,6 +863,10 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
             </div>
           </div>
           <div class="form-row"><label>本文（メモ・引用など）</label><textarea id="refs-body" rows="7"></textarea></div>
+          <div id="refs-files-row" hidden>
+            <label class="hint">添付ファイル（PC版のみ閲覧できます）</label>
+            <ul class="itemlist" id="refs-files"></ul>
+          </div>
           <div class="form-actions"><button id="btn-refs-save" class="primary">💾 保存</button></div>
         </div>
       </div>
@@ -866,6 +955,20 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
   <div class="form-actions"><button id="vprev-close" class="primary">閉じる</button></div>
 </dialog>
 
+<!-- ================================================== 選択話プレビュー -->
+<dialog id="eprev-dialog" class="wide">
+  <h2 id="eprev-title">選択話プレビュー</h2>
+  <div class="form-row">
+    <label style="display:flex;align-items:center;gap:4px;width:auto">
+      <input type="checkbox" id="eprev-strip" style="width:auto" checked>
+      ルビ・傍点を親文字だけで表示
+    </label>
+    <span class="preview-count" id="eprev-count" style="margin-top:6px"></span>
+  </div>
+  <div class="preview-body" id="eprev-body"></div>
+  <div class="form-actions"><button id="eprev-close" class="primary">閉じる</button></div>
+</dialog>
+
 <!-- ================================================== 章・全体プレビュー -->
 <dialog id="cprev-dialog" class="wide">
   <h2>横書きプレビュー（章・作品全体）</h2>
@@ -923,16 +1026,16 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
   </div>
 </dialog>
 
-<!-- ================================================== Claudeプロンプト -->
+<!-- ================================================== AIプロンプト -->
 <dialog id="claude-dialog" class="wide">
-  <h2>🤖 Claude に送る</h2>
+  <h2 id="ai-dialog-title">🤖 Claude に送る</h2>
   <div class="form-row"><label>用途</label><select id="claude-template"></select></div>
   <div id="claude-options"></div>
   <div class="form-row">
     <label>プロンプト（送信前に自由に編集できます）</label>
     <textarea id="claude-prompt" rows="14"></textarea>
   </div>
-  <p class="hint">コピーしてClaudeを開きます。結果は手動で該当欄に貼り戻してください（API連携はしません）。</p>
+  <p class="hint" id="ai-dialog-hint">コピーしてClaudeを開きます。結果は手動で該当欄に貼り戻してください（API連携はしません）。</p>
   <div class="form-actions">
     <button id="claude-regen">↻ 再生成</button>
     <button id="claude-cancel">キャンセル</button>
@@ -948,12 +1051,16 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
 
 /* ============================================================ データ層
    exe版のバックアップJSONと同一のテーブル構造で保持する。 */
-const SCHEMA_VERSION = 10;
+// exe版と揃える（v11=プロット序破急/伏線、v12=参考資料のフォルダ・添付）
+const SCHEMA_VERSION = 16;   // exe版の db.SCHEMA_VERSION と必ず揃える
 const TABLES = [
   "books", "bookmarks", "impressions", "quotes", "reading_schedule",
   "works", "chapters", "manuscripts", "plots", "characters",
   "timeline_events", "refs", "worldbuilding",
   "relationships", "branch_nodes", "branch_edges",
+  // ref_files はexe版専用（添付PDF等のメタ）。Web版にUIは無いが、
+  // データを保持して往復で消えないよう TABLES に含める。
+  "ref_files",
 ];
 const NAROU_GENRES = [
   "異世界〔恋愛〕", "現実世界〔恋愛〕", "ハイファンタジー", "ローファンタジー",
@@ -1572,13 +1679,20 @@ function formatRuby(base, kana) {
 function formatBoten(text) {
   return [...text].map(ch => /\s/.test(ch) ? ch : `｜${ch}《・》`).join("");
 }
+const COMBINING_DAKUTEN = "゙", COMBINING_HANDAKUTEN = "゚";
+function addCombiningMark(text, mark) {
+  // 各文字に結合濁点/半濁点を付与。空白は残し、既存マークは外して付け直す
+  return [...text]
+    .filter(ch => ch !== COMBINING_DAKUTEN && ch !== COMBINING_HANDAKUTEN)
+    .map(ch => /\s/.test(ch) ? ch : ch + mark).join("");
+}
 const RUBY_RE = /｜?([^｜《》\n]+)《[^《》\n]*》/g;
 function stripRuby(text) { return text.replace(RUBY_RE, "$1"); }
 function setLineSpacing(text, n) {
   const lines = text.replace(/\r\n/g, "\n").split("\n").filter(l => l.trim() !== "");
   return lines.join("\n".repeat(n));
 }
-const NO_INDENT = new Set([..."「『（(〈《【〔［[｟“\"'＜<―"]);
+const NO_INDENT = new Set([..."「『（(〈《【〔［[｟“\"'＜<―◇◆○●□■☆★＊※"]);
 function addIndentation(text) {
   return text.replace(/\r\n/g, "\n").split("\n").map(line => {
     if (line.trim() === "") return line;
@@ -1638,17 +1752,52 @@ function moveSibling(rows, id, delta) {
 }
 
 /* ============================================================ 作者モード: UI */
+function addShortStory() {
+  if (selWorkId === null) { toast("左のリストで自作品を選択してください"); return; }
+  const work = findWork(selWorkId);
+  const title = (work && work.title.trim()) ? work.title.trim() : "短編";
+  const id = addRow("manuscripts", {
+    work_id: selWorkId, chapter_id: null,
+    order_no: msInGroup(selWorkId, null).length + 1,
+    title, body: "", char_count: 0, updated_at: now(),
+  });
+  touchWork(selWorkId);
+  selNode = { kind: "episode", id };
+  loadEditor(id);
+  renderTree();
+  $("ms-editor").focus();
+}
+function updateCompleteButton() {
+  const btn = $("btn-work-complete");
+  const work = selWorkId === null ? null : findWork(selWorkId);
+  btn.disabled = !work;
+  btn.textContent = (work && work.completed) ? "↩ 連載中に戻す" : "🏁 完結にする";
+}
+function toggleCompleted() {
+  const work = selWorkId === null ? null : findWork(selWorkId);
+  if (!work) { toast("左のリストで自作品を選択してください"); return; }
+  work.completed = work.completed ? 0 : 1;
+  saveSoon();
+  renderWorks();
+  updateCompleteButton();
+  toast(work.completed ? "完結にしました" : "連載中に戻しました");
+}
+
 function renderWorks() {
   const works = [...state.tables.works]
     .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
   $("works-list").innerHTML = works.map(w => `
-    <li data-id="${w.id}" class="${w.id === selWorkId ? "selected" : ""}">✍️ ${esc(w.title)}</li>`).join("");
+    <li data-id="${w.id}" class="${w.id === selWorkId ? "selected" : ""}">${
+      w.completed ? '<span class="done-badge">完</span>' : ""}✍️ ${esc(w.title)}</li>`).join("");
   document.querySelectorAll("#works-list li").forEach(li =>
     li.addEventListener("click", () => selectWork(Number(li.dataset.id))));
+  updateCompleteButton();
 }
 const WVIEWS = ["hint", "info", "ms", "plot", "chars", "world", "timeline",
                 "refs", "relation", "branch"];
 function showWView(name) {
+  // 執筆原稿から離れるときは音声入力を止める
+  if (name !== "ms" && typeof voiceOn !== "undefined" && voiceOn) stopVoice();
   flushMs();
   flushPlot();
   flushBranchNote();
@@ -1736,9 +1885,87 @@ function selectedChapterId() {
   const ms = findMs(selNode.id);
   return ms ? (ms.chapter_id ?? null) : null;
 }
+/* ---- タイトルの連番送り（exe版 writer/title_tools.py と同じ規則） ---- */
+const TITLE_COUNTERS = "話章回幕節部巻編";
+const KANJI_DIGITS = { "〇":0,"零":0,"一":1,"二":2,"三":3,"四":4,"五":5,"六":6,"七":7,"八":8,"九":9 };
+const KANJI_CHARS = Object.keys(KANJI_DIGITS).join("") + "十百";
+const COUNTED_RE = new RegExp(
+  `^(.*?第?)([0-9]+|[${KANJI_CHARS}]+)([${TITLE_COUNTERS}])`);
+
+function kanjiToInt(text) {
+  if (!text || [...text].some(c => !KANJI_CHARS.includes(c))) return null;
+  let section = 0, digit = null;
+  for (const ch of text) {
+    if (ch in KANJI_DIGITS) digit = KANJI_DIGITS[ch];
+    else if (ch === "十") { section += (digit === null ? 1 : digit) * 10; digit = null; }
+    else if (ch === "百") { section += (digit === null ? 1 : digit) * 100; digit = null; }
+  }
+  return (section + (digit || 0)) || null;
+}
+function toKanji(value) {
+  if (value <= 0 || value >= 1000) return String(value);
+  const d = "〇一二三四五六七八九";
+  let out = "";
+  const hundreds = Math.floor(value / 100), rest = value % 100;
+  if (hundreds) out += (hundreds > 1 ? d[hundreds] : "") + "百";
+  const tens = Math.floor(rest / 10), ones = rest % 10;
+  if (tens) out += (tens > 1 ? d[tens] : "") + "十";
+  if (ones) out += d[ones];
+  return out;
+}
+function titleNumber(title) {
+  if (!title) return null;
+  const m = COUNTED_RE.exec(title);
+  if (m) return /^[0-9]+$/.test(m[2]) ? Number(m[2]) : kanjiToInt(m[2]);
+  const digits = title.match(/[0-9]+/g);
+  return digits ? Number(digits[digits.length - 1]) : null;
+}
+function nextTitle(title) {
+  if (!title) return null;
+  const m = COUNTED_RE.exec(title);
+  if (m) {
+    let nxt;
+    if (/^[0-9]+$/.test(m[2])) nxt = String(Number(m[2]) + 1).padStart(m[2].length, "0");
+    else {
+      const v = kanjiToInt(m[2]);
+      if (v === null) return null;
+      nxt = toKanji(v + 1);
+    }
+    return m[1] + nxt + m[3];
+  }
+  const digits = title.match(/[0-9]+/g);
+  if (!digits) return null;
+  const last = digits[digits.length - 1];
+  const at = title.lastIndexOf(last);
+  const nxt = String(Number(last) + 1).padStart(last.length, "0");
+  return title.slice(0, at) + nxt + title.slice(at + last.length);
+}
+function nextFromLargest(titles) {
+  const numbered = titles.map(t => [titleNumber(t), t]).filter(p => p[0] !== null);
+  if (!numbered.length) return null;
+  return nextTitle(numbered.reduce((a, b) => (b[0] > a[0] ? b : a))[1]);
+}
+function suggestChapterTitle() {
+  const chs = chaptersOf(selWorkId);
+  if (!chs.length) return "第一章";
+  return nextTitle(chs[chs.length - 1].title)
+      || nextFromLargest(chs.map(c => c.title))
+      || `第${toKanji(chs.length + 1)}章`;
+}
+function suggestEpisodeTitle() {
+  const eps = state.tables.manuscripts.filter(m => m.work_id === selWorkId);
+  if (!eps.length) return "第1話";
+  const chapterId = selectedChapterId();
+  const inChapter = msInGroup(selWorkId, chapterId);
+  let suggested = inChapter.length
+    ? nextTitle(inChapter[inChapter.length - 1].title) : null;
+  if (!suggested) suggested = nextFromLargest(eps.map(e => e.title));
+  return suggested || `第${eps.length + 1}話`;
+}
+
 async function addChapter() {
   if (selWorkId === null) return;
-  const title = await promptDialog("章のタイトル", "第一章");
+  const title = await promptDialog("章のタイトル", suggestChapterTitle());
   if (!title || !title.trim()) return;
   const id = addRow("chapters", {
     work_id: selWorkId, title: title.trim(),
@@ -1749,7 +1976,7 @@ async function addChapter() {
 }
 async function addEpisode() {
   if (selWorkId === null) return;
-  const title = await promptDialog("話のタイトル", "第1話");
+  const title = await promptDialog("話のタイトル", suggestEpisodeTitle());
   if (!title || !title.trim()) return;
   const chapterId = selectedChapterId();
   const id = addRow("manuscripts", {
@@ -1804,6 +2031,8 @@ function moveNode(delta) {
 
 /* ---- エディタ＋自動保存 */
 function loadEditor(msId) {
+  // 話を切り替えるときは音声入力を止める（別の話に書き込まれるのを防ぐ）
+  if (typeof voiceOn !== "undefined" && voiceOn) stopVoice();
   currentMsId = msId;
   msDirty = false;
   const editor = $("ms-editor");
@@ -1850,7 +2079,7 @@ async function addWork() {
   if (!title || !title.trim()) return;
   const ts = now();
   const id = addRow("works", {
-    title: title.trim(), synopsis: "", genre: "",
+    title: title.trim(), synopsis: "", genre: "", completed: 0,
     created_at: ts, updated_at: ts,
   });
   selectWork(id);
@@ -1882,8 +2111,46 @@ function replaceSelection(newText, cursorBack = 0) {
   ed.setSelectionRange(pos, pos);
   onMsInput();
 }
-function insertSnippet(snippet, back) {
+const SCENE_DIVIDER = "◇◇◇";
+function dividerInsertion(before, after, divider = SCENE_DIVIDER) {
+  const blank = "\n\n";
+  let lead;
+  if (!before || before.endsWith(blank)) lead = "";
+  else if (before.endsWith("\n")) lead = "\n";
+  else lead = blank;
+  let trail;
+  if (after.startsWith(blank)) trail = "";
+  else if (after.startsWith("\n")) trail = "\n";
+  else trail = blank;
+  return lead + divider + trail;
+}
+function insertDivider() {
   if (!msEditing()) return;
+  const ed = $("ms-editor");
+  const pos = ed.selectionEnd;              // 選択部分は消さない
+  ed.setSelectionRange(pos, pos);
+  const text = ed.value;
+  replaceSelection(dividerInsertion(text.slice(0, pos), text.slice(pos)));
+}
+const LINE_TAIL_CHARS = new Set([..."」』）)〉》】〕］]｝}”’\"'。、．，！？!?　 " + "	"]);
+function atLineTail(rest) {
+  return [...rest].every(ch => LINE_TAIL_CHARS.has(ch));
+}
+function insertSnippet(snippet, back, newParagraph = false) {
+  if (!msEditing()) return;
+  const ed = $("ms-editor");
+  if (newParagraph && ed.selectionStart === ed.selectionEnd) {
+    const text = ed.value, pos = ed.selectionStart;
+    const currentLine = text.slice(0, pos).split("\n").pop();
+    const restOfLine = text.slice(pos).split("\n")[0];
+    if (currentLine.trim() && atLineTail(restOfLine)) {
+      // 行末（閉じ括弧の外）まで送ってから改行する
+      const lineEnd = pos + restOfLine.length;
+      ed.setSelectionRange(lineEnd, lineEnd);
+      replaceSelection("\n" + snippet, back);   // 空行は入れない
+      return;
+    }
+  }
   replaceSelection(snippet, back);
 }
 let rubyRange = null;   // ダイアログ表示中に失われる選択範囲を保持
@@ -1902,6 +2169,321 @@ function applyBoten() {
   const converted = formatBoten(sel.text);
   replaceSelection(converted);
   toast("傍点を付けました");
+}
+function applyCombining(kind) {
+  if (!msEditing()) return;
+  const name = kind === "dakuten" ? "濁点" : "半濁点";
+  const sel = editorSelection();
+  if (!sel.text) { toast(`${name}を付ける文字列を選択してください`); return; }
+  const mark = kind === "dakuten" ? COMBINING_DAKUTEN : COMBINING_HANDAKUTEN;
+  replaceSelection(addCombiningMark(sel.text, mark));
+  toast(`${name}を付けました`);
+}
+
+/* ============================================================ 音声入力（口述筆記）
+   Web Speech API で認識した文をバッファに溜め、F9=会話（「」＋改行）/
+   F10=地の文（字下げ＋改行）で本文に確定する。 */
+let recognition = null;      // SpeechRecognition インスタンス
+let voiceOn = false;
+let voiceFinal = "";         // 確定済みの認識テキスト（未挿入分）
+let voiceInterim = "";       // 認識途中のテキスト
+let voiceStopping = false;   // ユーザー操作で停止中か（自動再開の抑止）
+
+function speechSupported() {
+  return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+}
+function renderVoiceBuffer() {
+  $("voice-buffer").innerHTML =
+    esc(voiceFinal) + (voiceInterim ? `<span class="interim">${esc(voiceInterim)}</span>` : "");
+}
+function setVoiceStatus(text) { $("voice-status").textContent = text; }
+
+async function toggleVoice() {
+  if (voiceOn) { stopVoice(); return; }
+  if (!msEditing()) return;
+  if (!speechSupported()) {
+    setVoiceStatus("このブラウザは音声入力に非対応です");
+    $("voice-panel").classList.add("on");
+    toast("このブラウザは音声入力に対応していません（Chrome / Edge をお試しください）");
+    return;
+  }
+  $("voice-panel").classList.add("on");
+  // マイク許可は SpeechRecognition 自身が扱うため getUserMedia は呼ばない
+  // （二重に呼ぶと許可ポップアップが2回出るため）。
+  // 事前に拒否済みと分かっている場合だけ、開始せず案内する。
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      const status = await navigator.permissions.query({ name: "microphone" });
+      if (status.state === "denied") {
+        const msg = "マイクがブロックされています。ブラウザのアドレスバー左の"
+                  + "🔒アイコンから「マイク」を許可してください";
+        setVoiceStatus("⚠ " + msg);
+        toast(msg);
+        return;
+      }
+    }
+  } catch (e) { /* permissions API 非対応環境では判定をスキップ */ }
+  startVoice();
+}
+let voiceRestartTimer = null;
+let voiceWatchdog = null;
+let voiceLastAlive = 0;      // 最後に認識が生きていた時刻
+let voiceLog = [];           // 診断用のイベント履歴
+let voiceRestarts = [];      // 再開した時刻（ループ検出用）
+
+function voiceLogAdd(event) {
+  const t = new Date().toLocaleTimeString("ja-JP");
+  voiceLog.push(`${t} ${event}`);
+  if (voiceLog.length > 24) voiceLog.shift();
+}
+
+const VOICE_ERROR_MESSAGES = {
+  "not-allowed": "マイクの使用が許可されていません（🔒アイコンから許可してください）",
+  "service-not-allowed": "音声認識サービスを利用できません（Chromeの設定やネットワークを確認してください）",
+  "no-speech": "音声が検出されません…（マイクに近づいて話してみてください）",
+  "audio-capture": "マイクが見つかりません（接続と既定デバイスを確認してください）",
+  "network": "音声認識サーバーに接続できません（オンライン接続が必要です）",
+  "aborted": "認識が中断されました",
+};
+
+/* 認識インスタンスを作る。再開時も作り直す（使い回すと Chrome で
+   start() が無視されることがあるため）。 */
+function createRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const rec = new SR();
+  rec.lang = "ja-JP";
+  rec.continuous = true;
+  rec.interimResults = true;
+  rec.onresult = ev => {
+    voiceLastAlive = Date.now();
+    let interim = "";
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const res = ev.results[i];
+      if (res.isFinal) voiceFinal += res[0].transcript;
+      else interim += res[0].transcript;
+    }
+    voiceInterim = interim;
+    renderVoiceBuffer();
+  };
+  rec.onstart = () => {
+    voiceLastAlive = Date.now();
+    voiceLogAdd("開始(start)");
+    setVoiceStatus("🎙 認識中…（話してください）");
+  };
+  rec.onaudiostart = () => {
+    voiceLastAlive = Date.now();
+    voiceLogAdd("マイク入力あり(audiostart)");
+  };
+  rec.onspeechstart = () => {
+    voiceLastAlive = Date.now();
+    voiceLogAdd("発話検出(speechstart)");
+    setVoiceStatus("🗣 発話を検出しました");
+  };
+  rec.onerror = ev => {
+    voiceLogAdd(`エラー: ${ev.error}`);
+    // 復帰不能なものだけ停止し、それ以外は再開して書き続けられるようにする
+    if (["not-allowed", "service-not-allowed", "audio-capture"].includes(ev.error)) {
+      setVoiceStatus("⚠ " + (VOICE_ERROR_MESSAGES[ev.error] || `エラー: ${ev.error}`));
+      toast(VOICE_ERROR_MESSAGES[ev.error] || ev.error);
+      stopVoice();
+    } else if (ev.error === "no-speech") {
+      setVoiceStatus("🎙 認識中…（無音が続いています）");
+    } else {
+      setVoiceStatus("⚠ " + (VOICE_ERROR_MESSAGES[ev.error] || `エラー: ${ev.error}`));
+    }
+  };
+  rec.onend = () => {
+    voiceLogAdd("終了(end)");
+    // 無音などでブラウザが勝手に終了するため、停止操作でなければ再開する
+    if (voiceOn && !voiceStopping) restartVoice();
+  };
+  return rec;
+}
+
+/* 短時間に再開を繰り返している＝認識がすぐ落ちている状態を検出する */
+function detectRestartLoop() {
+  const now = Date.now();
+  voiceRestarts = voiceRestarts.filter(t => now - t < 12000);
+  voiceRestarts.push(now);
+  if (voiceRestarts.length >= 5) {
+    setVoiceStatus("⚠ 認識がすぐ終了します（「🔍 診断」で原因を確認してください）");
+    return true;
+  }
+  return false;
+}
+
+/* 認識を作り直して開始する（切れたあとの再開もこれを使う）。
+   すぐ落ちる状態では間隔を空けて、再開の暴走を防ぐ。 */
+function restartVoice(delay) {
+  const looping = detectRestartLoop();
+  if (delay === undefined) delay = looping ? 1200 : 300;
+  clearTimeout(voiceRestartTimer);
+  voiceRestartTimer = setTimeout(() => {
+    if (!voiceOn || voiceStopping) return;
+    if (recognition) {   // 古いインスタンスは完全に切り離す
+      recognition.onend = recognition.onerror = recognition.onresult = null;
+      try { recognition.abort(); } catch (e) {}
+    }
+    try {
+      recognition = createRecognition();
+      recognition.start();
+      voiceLastAlive = Date.now();
+      voiceLogAdd("再開を試行");
+    } catch (e) {
+      voiceLogAdd(`再開失敗: ${e && e.name ? e.name : e}`);
+      if (e && e.name === "InvalidStateError") restartVoice(600);
+      else setVoiceStatus("⚠ 再開できませんでした: " + (e && e.name ? e.name : e));
+    }
+  }, delay);
+}
+
+function startVoice() {
+  voiceLog = [];        // 診断ログは開始のたびにリセット
+  voiceRestarts = [];
+  recognition = createRecognition();
+  try {
+    recognition.start();
+  } catch (e) {
+    voiceLogAdd(`開始失敗: ${e && e.name ? e.name : e}`);
+    toast("音声入力を開始できませんでした: " + (e && e.name ? e.name : e));
+    return;
+  }
+  voiceOn = true;
+  voiceStopping = false;
+  voiceLastAlive = Date.now();
+  voiceFinal = ""; voiceInterim = "";
+  renderVoiceBuffer();
+  setVoiceStatus("認識中…");
+  // 保険：一定時間まったく反応がなければ作り直す（Chromeで無言のまま
+  // 止まることがあるため）
+  clearInterval(voiceWatchdog);
+  voiceWatchdog = setInterval(() => {
+    if (!voiceOn || voiceStopping) return;
+    if (Date.now() - voiceLastAlive > 8000) {
+      setVoiceStatus("🎙 認識を再開しています…");
+      restartVoice(0);
+      voiceLastAlive = Date.now();
+    }
+  }, 3000);
+  $("voice-panel").classList.add("on");
+  $("btn-ms-voice").classList.add("recording");
+  $("btn-ms-voice").textContent = "⏹ 音声入力を停止";
+  toast("音声入力を開始しました（F9=会話 / F10=地の文）");
+}
+function stopVoice() {
+  voiceStopping = true;
+  voiceOn = false;
+  clearTimeout(voiceRestartTimer);   // 予約されている再開をキャンセル
+  clearInterval(voiceWatchdog);      // 生存監視も止める
+  if (recognition) {
+    // 停止時に再開が走らないよう、ハンドラを外してから止める
+    recognition.onend = recognition.onerror = recognition.onresult = null;
+    try { recognition.abort(); } catch (e) {}
+    try { recognition.stop(); } catch (e) {}
+  }
+  recognition = null;
+  $("voice-panel").classList.remove("on");
+  $("btn-ms-voice").classList.remove("recording");
+  $("btn-ms-voice").textContent = "🎤 音声入力";
+  setVoiceStatus("");
+}
+function clearVoiceBuffer() {
+  voiceFinal = ""; voiceInterim = "";
+  renderVoiceBuffer();
+}
+/* 音声入力が動かないときの原因を調べてバッファ欄に表示する */
+async function diagnoseVoice() {
+  const lines = [];
+  const ua = navigator.userAgent;
+  const browser = /Edg\//.test(ua) ? "Edge"
+    : /Chrome\//.test(ua) ? "Chrome"
+    : /Safari\//.test(ua) ? "Safari" : "その他";
+  lines.push(`ブラウザ: ${browser}`);
+  lines.push(`音声認識API: ${speechSupported() ? "利用可能" : "×  非対応"}`);
+  lines.push(`接続: ${location.protocol}//${location.host}`
+             + (window.isSecureContext ? "（安全な接続）" : "（⚠ 安全でない接続）"));
+  lines.push(`オンライン: ${navigator.onLine ? "はい" : "×  いいえ（音声認識には接続が必要）"}`);
+
+  try {
+    if (navigator.permissions && navigator.permissions.query) {
+      const st = await navigator.permissions.query({ name: "microphone" });
+      const label = { granted: "許可済み", denied: "×  ブロック中", prompt: "未設定（初回に確認されます）" };
+      lines.push(`マイク許可: ${label[st.state] || st.state}`);
+    }
+  } catch (e) { lines.push("マイク許可: 判定できません"); }
+
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const mics = devices.filter(d => d.kind === "audioinput");
+    lines.push(`マイク: ${mics.length ? `${mics.length}個 検出` : "×  見つかりません"}`);
+    if (mics.length && mics[0].label) lines.push(`　既定: ${mics[0].label}`);
+  } catch (e) { lines.push("マイク: 一覧を取得できません"); }
+
+  lines.push(`認識の状態: ${voiceOn ? "動作中" : "停止中"}`);
+  const recent = voiceRestarts.filter(t => Date.now() - t < 12000).length;
+  if (recent >= 3) lines.push(`⚠ 直近12秒の再開回数: ${recent}回（すぐ切れています）`);
+
+  if (voiceLog.length) {
+    lines.push("");
+    lines.push("── 直近のイベント ──");
+    lines.push(...voiceLog.slice(-12));
+  }
+
+  lines.push("");
+  lines.push("※ 「認識中」のまま文字にならない場合の確認:");
+  if (browser === "Chrome") {
+    lines.push("　1.【最有力】使用するマイクの選択を見直してください。");
+    lines.push("　　 chrome://settings/content/microphone を開き、上部のマイク選択で");
+    lines.push("　　「通信 - マイク…」ではなく「（システムのデフォルト）」の方を選ぶ。");
+    lines.push("　　（Windowsの「通信用デバイス」は音声認識に音が届かないことがあります）");
+    lines.push("　2. 同じページを別のタブで開いていませんか？（マイクが競合します）");
+    lines.push("　3. 他のアプリ（Edge等）が録音中ではありませんか？");
+    lines.push("　4. 同じ設定画面で、このサイトが「ブロック」に入っていないか確認。");
+  } else {
+    lines.push("　1. 同じページを別のタブで開いていませんか？（マイクが競合します）");
+    lines.push("　2. 他のアプリが録音中ではありませんか？");
+    lines.push("　3. OSのサウンド設定で、使いたいマイクが既定になっているか確認。");
+  }
+  $("voice-buffer").innerHTML = esc(lines.join("\n"));
+  $("voice-panel").classList.add("on");
+}
+
+/* 認識テキストの前後の空白と、末尾の句点を整える */
+function tidyVoiceText(text, forTalk) {
+  let t = text.replace(/\s+/g, "").trim();
+  if (!t) return "";
+  if (forTalk) {
+    // 会話文は末尾の句点を落とす（「〜です。」→「〜です」）
+    t = t.replace(/[。．.]+$/, "");
+  } else if (!/[。！？!?、」』…―]$/.test(t)) {
+    t += "。";   // 地の文は句点で締める
+  }
+  return t;
+}
+function commitVoice(kind) {
+  if (!voiceOn) return;
+  const raw = voiceFinal + voiceInterim;
+  const text = tidyVoiceText(raw, kind === "talk");
+  if (!text) { toast("確定するテキストがありません"); return; }
+  const ed = $("ms-editor");
+  // 直前が改行でなければ改行してから挿入する
+  const needsBreak = ed.value.length > 0 && !ed.value.endsWith("\n");
+  const line = kind === "talk" ? `「${text}」` : `　${text}`;
+  const insert = (needsBreak ? "\n" : "") + line + "\n";
+  ed.focus();
+  ed.setSelectionRange(ed.value.length, ed.value.length);
+  if (!document.execCommand("insertText", false, insert)) {
+    ed.value += insert;   // フォールバック
+  }
+  onMsInput();
+  scrollEditorToBottom();   // 書き足した最新行が見えるようにする
+  clearVoiceBuffer();
+  setVoiceStatus(kind === "talk" ? "会話を確定しました" : "地の文を確定しました");
+}
+/* 口述筆記中は末尾に追記していくので、常に最新行までスクロールする */
+function scrollEditorToBottom() {
+  const ed = $("ms-editor");
+  ed.scrollTop = ed.scrollHeight;
 }
 function applyLineSpacing(n) {
   if (!msEditing()) return;
@@ -1997,6 +2579,24 @@ function composeWork(workId) {
 }
 
 /* ---- 縦書きプレビュー */
+let eprevBody = "";
+function renderEPrev() {
+  $("eprev-body").textContent =
+    $("eprev-strip").checked ? stripRuby(eprevBody) : eprevBody;
+  $("eprev-count").textContent =
+    `${countChars(stripRuby(eprevBody)).toLocaleString()} 字`;
+}
+function openEPrev() {
+  if (!msEditing()) return;
+  const body = $("ms-editor").value;
+  if (!body.trim()) { toast("本文がまだありません"); return; }
+  const ms = findMs(currentMsId);
+  eprevBody = body;
+  $("eprev-title").textContent = `選択話プレビュー — ${ms ? ms.title : ""}`;
+  renderEPrev();
+  $("eprev-dialog").showModal();
+}
+
 function openVPrev() {
   if (!msEditing()) return;
   const body = $("ms-editor").value;
@@ -2067,22 +2667,65 @@ function copyWorkText() {
 
 /* ============================================================ プロット */
 let plotDirty = false, plotFlushTimer = null;
+let plotStructure = "kishotenketsu";
 const PLOT_FIELDS = { "plot-body": "body", "plot-ki": "ki", "plot-sho": "sho",
-                      "plot-ten": "ten", "plot-ketsu": "ketsu" };
+                      "plot-ten": "ten", "plot-ketsu": "ketsu",
+                      "plot-jo": "jo", "plot-ha": "ha", "plot-kyu": "kyu" };
 function getPlot(workId) {
   let p = state.tables.plots.find(r => r.work_id === workId);
   if (!p) {
     p = { id: nextId("plots"), work_id: workId, body: "", ki: "", sho: "",
-          ten: "", ketsu: "" };
+          ten: "", ketsu: "", jo: "", ha: "", kyu: "",
+          structure: "kishotenketsu", foreshadowing: "[]" };
     state.tables.plots.push(p);
   }
   return p;
 }
+function applyPlotStructure(structure) {
+  plotStructure = structure === "johakyu" ? "johakyu" : "kishotenketsu";
+  $("plot-boxes-ksk").hidden = plotStructure !== "kishotenketsu";
+  $("plot-boxes-jhk").hidden = plotStructure !== "johakyu";
+  $("struct-ksk").classList.toggle("active", plotStructure === "kishotenketsu");
+  $("struct-jhk").classList.toggle("active", plotStructure === "johakyu");
+}
 function loadPlot() {
   const p = getPlot(selWorkId);
   for (const [el, key] of Object.entries(PLOT_FIELDS)) $(el).value = p[key] || "";
+  applyPlotStructure(p.structure);
+  $("plot-fore").innerHTML = "";
+  let fore = [];
+  try { fore = JSON.parse(p.foreshadowing || "[]"); } catch (e) {}
+  for (const item of fore) {
+    if (item && typeof item === "object") addForeRow(item.plant || "", item.payoff || "");
+  }
   plotDirty = false;
   $("plot-save-label").textContent = "";
+}
+function addForeRow(plant = "", payoff = "") {
+  const row = document.createElement("div");
+  row.className = "custom-row";
+  const p = document.createElement("input");
+  p.className = "clabel"; p.style.flex = "1"; p.placeholder = "伏線（張った内容）"; p.value = plant;
+  p.addEventListener("input", onPlotInput);
+  const arrow = document.createElement("span");
+  arrow.textContent = "→"; arrow.style.alignSelf = "center";
+  const q = document.createElement("input");
+  q.className = "cvalue"; q.placeholder = "回収（どこで・どう回収）"; q.value = payoff;
+  q.addEventListener("input", onPlotInput);
+  const del = document.createElement("button");
+  del.className = "cdel"; del.textContent = "×"; del.title = "この伏線を削除";
+  del.addEventListener("click", () => { row.remove(); onPlotInput(); });
+  row.append(p, arrow, q, del);
+  $("plot-fore").appendChild(row);
+}
+function collectFore() {
+  const result = [];
+  for (const row of $("plot-fore").querySelectorAll(".custom-row")) {
+    const plant = row.querySelector(".clabel").value.trim();
+    const payoff = row.querySelector(".cvalue").value.trim();
+    if (plant || payoff) result.push({ plant, payoff });
+  }
+  return JSON.stringify(result);
 }
 function onPlotInput() {
   plotDirty = true;
@@ -2095,6 +2738,8 @@ function flushPlot() {
   if (!plotDirty || selWorkId === null) return;
   const p = getPlot(selWorkId);
   for (const [el, key] of Object.entries(PLOT_FIELDS)) p[key] = $(el).value;
+  p.structure = plotStructure;
+  p.foreshadowing = collectFore();
   touchWork(selWorkId);
   plotDirty = false;
   saveSoon();
@@ -2111,32 +2756,76 @@ function charsOf(workId) {
 function parseProfile(c) {
   try { return JSON.parse(c.profile_json || "{}"); } catch (e) { return {}; }
 }
+function parseAliases(c) {
+  try {
+    const v = JSON.parse(c.aliases || "[]");
+    return Array.isArray(v) ? v.filter(x => String(x).trim()) : [];
+  } catch (e) { return []; }
+}
+function collectAliases() {
+  const seen = [];
+  for (const part of $("char-aliases").value.split(/[,、，/／]/)) {
+    const t = part.trim();
+    if (t && !seen.includes(t)) seen.push(t);
+  }
+  return seen;
+}
 function renderCharList() {
   const items = charsOf(selWorkId);
   $("char-list").innerHTML = items.map(c => `
     <li data-id="${c.id}" class="${c.id === selCharId ? "selected" : ""}">
-      ${esc(c.name)}${c.role ? "（" + esc(c.role) + "）" : ""}</li>`).join("");
+      ${esc(c.name)}${c.reading ? "《" + esc(c.reading) + "》" : ""}${c.role ? "（" + esc(c.role) + "）" : ""}</li>`).join("");
   document.querySelectorAll("#char-list li").forEach(li =>
     li.addEventListener("click", () => { selCharId = Number(li.dataset.id); loadChar(); renderCharList(); }));
   if (!items.some(c => c.id === selCharId)) clearCharForm();
 }
 function clearCharForm() {
   $("char-name").value = ""; $("char-role").value = "";
+  $("char-reading").value = ""; $("char-aliases").value = "";
   for (const f of CHAR_FIELDS) $("char-" + f).value = "";
+  $("char-custom").innerHTML = "";
 }
 function loadChar() {
   const c = state.tables.characters.find(x => x.id === selCharId);
   if (!c) { clearCharForm(); return; }
   $("char-name").value = c.name;
+  $("char-reading").value = c.reading || "";
+  $("char-aliases").value = parseAliases(c).join("、");
   $("char-role").value = c.role || "";
   const prof = parseProfile(c);
   for (const f of CHAR_FIELDS) $("char-" + f).value = prof[f] || "";
+  $("char-custom").innerHTML = "";
+  for (const item of (prof.custom || [])) {
+    if (item && typeof item === "object") addCustomRow(item.label || "", item.value || "");
+  }
+}
+function addCustomRow(label = "", value = "") {
+  const row = document.createElement("div");
+  row.className = "custom-row";
+  const l = document.createElement("input");
+  l.className = "clabel"; l.placeholder = "項目名（例: 特技）"; l.value = label;
+  const v = document.createElement("textarea");
+  v.className = "cvalue"; v.rows = 2; v.value = value;
+  const del = document.createElement("button");
+  del.className = "cdel"; del.textContent = "×"; del.title = "この項目を削除";
+  del.addEventListener("click", () => row.remove());
+  row.append(l, v, del);
+  $("char-custom").appendChild(row);
+}
+function collectCustom() {
+  const result = [];
+  for (const row of $("char-custom").querySelectorAll(".custom-row")) {
+    const label = row.querySelector(".clabel").value.trim();
+    const value = row.querySelector(".cvalue").value;
+    if (label || value.trim()) result.push({ label, value });
+  }
+  return result;
 }
 async function addChar() {
   const name = await promptDialog("キャラクター名", "");
   if (!name || !name.trim()) return;
   selCharId = addRow("characters", {
-    work_id: selWorkId, name: name.trim(), role: "",
+    work_id: selWorkId, name: name.trim(), reading: "", aliases: "[]", role: "",
     profile_json: "{}", x: null, y: null,
   });
   touchWork(selWorkId);
@@ -2149,7 +2838,10 @@ function saveChar() {
   if (!name) { toast("名前は必須です"); return; }
   const prof = parseProfile(c);   // 既存キー（image_mode等）を保持
   for (const f of CHAR_FIELDS) prof[f] = $("char-" + f).value;
+  prof.custom = collectCustom();
   c.name = name;
+  c.reading = $("char-reading").value.trim();
+  c.aliases = JSON.stringify(collectAliases());
   c.role = $("char-role").value.trim();
   c.profile_json = JSON.stringify(prof);
   saveSoon();
@@ -2260,32 +2952,59 @@ function refsOf(workId) {
   return state.tables.refs.filter(r => r.work_id === workId)
     .sort((a, b) => a.id - b.id);
 }
+function refFolders(workId) {
+  return [...new Set(refsOf(workId).map(r => r.folder).filter(Boolean))].sort();
+}
+function humanSize(n) {
+  let size = Number(n) || 0;
+  for (const unit of ["B", "KB", "MB", "GB"]) {
+    if (size < 1024 || unit === "GB")
+      return unit === "B" ? `${Math.round(size)}B` : `${size.toFixed(1)}${unit}`;
+    size /= 1024;
+  }
+  return `${n}B`;
+}
 function renderRefsList() {
   const items = refsOf(selWorkId);
-  $("refs-list").innerHTML = items.map(r => `
+  // フォルダ順→ID順で並べ、フォルダ名を頭に付けて表示（exe版のフォルダ分けを反映）
+  const sorted = [...items].sort((a, b) =>
+    (a.folder || "￿").localeCompare(b.folder || "￿") || a.id - b.id);
+  $("refs-list").innerHTML = sorted.map(r => `
     <li data-id="${r.id}" class="${r.id === selRefId ? "selected" : ""}">
-      ${r.tag ? "[" + esc(r.tag) + "] " : ""}${esc(r.title)}</li>`).join("");
+      ${r.folder ? "📁" + esc(r.folder) + " / " : ""}${r.tag ? "[" + esc(r.tag) + "] " : ""}${esc(r.title)}</li>`).join("");
   document.querySelectorAll("#refs-list li").forEach(li =>
     li.addEventListener("click", () => { selRefId = Number(li.dataset.id); loadRef(); renderRefsList(); }));
+  $("refs-folder-list").innerHTML =
+    refFolders(selWorkId).map(f => `<option>${esc(f)}</option>`).join("");
   if (!items.some(r => r.id === selRefId)) clearRefForm();
 }
 function clearRefForm() {
   $("refs-title").value = ""; $("refs-tag").value = "";
   $("refs-url").value = ""; $("refs-body").value = "";
+  $("refs-folder").value = "";
+  $("refs-files").innerHTML = "";
+  $("refs-files-row").hidden = true;
 }
 function loadRef() {
   const r = state.tables.refs.find(x => x.id === selRefId);
   if (!r) { clearRefForm(); return; }
   $("refs-title").value = r.title;
+  $("refs-folder").value = r.folder || "";
   $("refs-tag").value = r.tag || "";
   $("refs-url").value = r.url || "";
   $("refs-body").value = r.body || "";
+  // 添付ファイルはexe版で追加されたもの。Web版では一覧表示のみ
+  const files = state.tables.ref_files.filter(f => f.ref_id === r.id);
+  $("refs-files-row").hidden = files.length === 0;
+  $("refs-files").innerHTML = files.map(f =>
+    `<li>📄 ${esc(f.original_name)}（${humanSize(f.size)}）</li>`).join("");
 }
 async function addRef() {
   const title = await promptDialog("資料のタイトル", "");
   if (!title || !title.trim()) return;
   selRefId = addRow("refs", {
     work_id: selWorkId, title: title.trim(), body: "", url: "", tag: "",
+    folder: "",
   });
   loadRef(); renderRefsList();
 }
@@ -2295,6 +3014,7 @@ function saveRef() {
   const title = $("refs-title").value.trim();
   if (!title) { toast("タイトルは必須です"); return; }
   r.title = title;
+  r.folder = $("refs-folder").value.trim();
   r.tag = $("refs-tag").value.trim();
   r.url = $("refs-url").value.trim();
   r.body = $("refs-body").value;
@@ -2725,11 +3445,15 @@ function applyTheme(theme) {
   }
 }
 
-/* ============================================================ Claude連携
-   手動ハンドオフ方式: プロンプトを生成してコピー→claude.ai を開くだけ。
-   API連携・自動実行はしない。 */
-const CLAUDE_URL = "https://claude.ai/new";
+/* ============================================================ AI連携
+   手動ハンドオフ方式: プロンプトを生成してコピー→サービスを開くだけ。
+   API連携・自動実行はしない。送り先を増やすなら AI_PROVIDERS に足す。 */
+const AI_PROVIDERS = {
+  claude:  { label: "Claude",  icon: "🤖", url: "https://claude.ai/new" },
+  chatgpt: { label: "ChatGPT", icon: "💬", url: "https://chatgpt.com/" },
+};
 let claudeTemplates = [];
+let aiProvider = "claude";
 
 function readerHead(b) {
   const lines = [`タイトル: ${b.title}`];
@@ -2876,7 +3600,13 @@ function buildWriterTemplates() {
     },
   ];
 }
-function openClaudeDialog(templates) {
+function openClaudeDialog(templates, provider = "claude") {
+  aiProvider = AI_PROVIDERS[provider] ? provider : "claude";
+  const p = AI_PROVIDERS[aiProvider];
+  $("ai-dialog-title").textContent = `${p.icon} ${p.label} に送る`;
+  $("ai-dialog-hint").textContent =
+    `コピーして${p.label}を開きます。結果は手動で該当欄に貼り戻してください（API連携はしません）。`;
+  $("claude-copy").textContent = `📋 コピーして${p.label}を開く`;
   claudeTemplates = templates;
   $("claude-template").innerHTML =
     templates.map((t, i) => `<option value="${i}">${esc(t.name)}</option>`).join("");
@@ -2905,22 +3635,23 @@ function buildClaudePrompt() {
 async function copyAndOpenClaude() {
   const text = $("claude-prompt").value.trim();
   if (!text) { toast("プロンプトが空です"); return; }
+  const p = AI_PROVIDERS[aiProvider];
   const ok = await copyText(text);
   $("claude-dialog").close();
-  window.open(CLAUDE_URL, "_blank", "noopener");
-  toast(ok ? "プロンプトをコピーしました。Claudeに貼り付けてください"
+  window.open(p.url, "_blank", "noopener");
+  toast(ok ? `プロンプトをコピーしました。${p.label}に貼り付けてください`
            : "⚠ コピーできませんでした（手動でコピーしてください）");
 }
-function sendReaderToClaude() {
+function sendReaderToAi(provider) {
   if (selectedBookId === null) { toast("一覧から作品を選択してください"); return; }
   const b = findBook(selectedBookId);
   if (!b) return;
-  openClaudeDialog(buildReaderTemplates(b));
+  openClaudeDialog(buildReaderTemplates(b), provider);
 }
-function sendWriterToClaude() {
+function sendWriterToAi(provider) {
   if (selWorkId === null) { toast("左のリストで自作品を選択してください"); return; }
   flushMs(); flushPlot();
-  openClaudeDialog(buildWriterTemplates());
+  openClaudeDialog(buildWriterTemplates(), provider);
 }
 
 /* ============================================================ モード切替 */
@@ -2968,6 +3699,7 @@ const FK_MAP = {
   characters: { work_id: "works" },
   timeline_events: { work_id: "works" },
   refs: { work_id: "works" },
+  ref_files: { ref_id: "refs" },
   worldbuilding: { work_id: "works" },
   relationships: { work_id: "works", char_a_id: "characters", char_b_id: "characters" },
   branch_nodes: { work_id: "works" },
@@ -2978,7 +3710,7 @@ const REQUIRED_FK = {
   bookmarks: ["book_id"], impressions: ["book_id"], quotes: ["book_id"],
   reading_schedule: ["book_id"], chapters: ["work_id"], manuscripts: ["work_id"],
   plots: ["work_id"], characters: ["work_id"], timeline_events: ["work_id"],
-  refs: ["work_id"], worldbuilding: ["work_id"],
+  refs: ["work_id"], ref_files: ["ref_id"], worldbuilding: ["work_id"],
   relationships: ["work_id", "char_a_id", "char_b_id"],
   branch_nodes: ["work_id"],
   branch_edges: ["work_id", "from_node_id", "to_node_id"],
@@ -3124,6 +3856,8 @@ async function init() {
 
   // 作者モード
   $("btn-work-add").addEventListener("click", addWork);
+  $("btn-work-complete").addEventListener("click", toggleCompleted);
+  $("btn-short-add").addEventListener("click", addShortStory);
   $("btn-work-del").addEventListener("click", () =>
     twoStep($("btn-work-del"), "⚠ もう一度押すと削除（章・原稿等も消えます）", () => {
       if (selWorkId === null) { toast("削除する作品を選択してください"); return; }
@@ -3153,14 +3887,31 @@ async function init() {
   // 執筆支援ツールバー
   document.querySelectorAll(".ms-tools button[data-insert]").forEach(btn =>
     btn.addEventListener("click", () =>
-      insertSnippet(btn.dataset.insert, Number(btn.dataset.back))));
+      insertSnippet(btn.dataset.insert, Number(btn.dataset.back),
+                    btn.dataset.newpara === "1")));
   $("btn-ms-ruby").addEventListener("click", applyRuby);
   $("btn-ms-boten").addEventListener("click", applyBoten);
+  $("btn-ms-dakuten").addEventListener("click", () => applyCombining("dakuten"));
+  $("btn-ms-handakuten").addEventListener("click", () => applyCombining("handakuten"));
   $("btn-ms-register").addEventListener("click", openRegisterDialog);
+  $("btn-ms-voice").addEventListener("click", () => {
+    toggleVoice().catch(e => {
+      setVoiceStatus("⚠ " + (e && e.message ? e.message : e));
+    });
+  });
+  $("btn-voice-talk").addEventListener("click", () => commitVoice("talk"));
+  $("btn-voice-narration").addEventListener("click", () => commitVoice("narration"));
+  $("btn-voice-clear").addEventListener("click", clearVoiceBuffer);
+  $("btn-voice-diag").addEventListener("click", () => {
+    diagnoseVoice().catch(e => setVoiceStatus("診断に失敗しました: " + e));
+  });
   document.querySelectorAll(".ms-tools button[data-spacing]").forEach(btn =>
     btn.addEventListener("click", () => applyLineSpacing(Number(btn.dataset.spacing))));
   $("btn-ms-vprev").addEventListener("click", openVPrev);
+  $("btn-ms-eprev").addEventListener("click", openEPrev);
   $("btn-ms-cprev").addEventListener("click", openCPrev);
+  $("eprev-strip").addEventListener("change", renderEPrev);
+  $("eprev-close").addEventListener("click", () => $("eprev-dialog").close());
   $("btn-ms-copy-ep").addEventListener("click", copyEpisode);
   $("btn-ms-copy-ch").addEventListener("click", copyChapterText);
   $("btn-ms-copy-all").addEventListener("click", copyWorkText);
@@ -3180,6 +3931,8 @@ async function init() {
   $("cprev-range").addEventListener("change", renderCPrev);
   $("cprev-close").addEventListener("click", () => $("cprev-dialog").close());
 
+  $("btn-ms-divider").addEventListener("click", insertDivider);
+
   // 字下げチェックの状態を記憶
   try {
     $("ms-indent").checked = localStorage.getItem("yomikaki-web-indent") === "1";
@@ -3190,19 +3943,36 @@ async function init() {
 
   // F1〜F6ショートカット（エディタにフォーカスがあるときだけ）
   $("ms-editor").addEventListener("keydown", ev => {
-    const map = { F1: () => insertSnippet("「」", 1), F2: () => insertSnippet("……", 0),
-      F3: () => insertSnippet("――", 0), F4: () => insertSnippet("　", 0),
-      F5: applyRuby, F6: applyBoten };
+    const map = { F1: () => insertSnippet("「」", 1, true), F2: () => insertSnippet("……", 0),
+      F3: () => insertSnippet("――", 0), F4: () => insertSnippet("　", 0, true),
+      F5: applyRuby, F6: applyBoten, F7: insertDivider };
     if (map[ev.key]) { ev.preventDefault(); map[ev.key](); }
+  });
+
+  // F9/F10/Esc（音声入力中のみ。マイクに向かって話す間はフォーカスが
+  // エディタ外にあることもあるため window で受ける）
+  window.addEventListener("keydown", ev => {
+    if (!voiceOn) return;
+    if (ev.key === "F9") { ev.preventDefault(); commitVoice("talk"); }
+    else if (ev.key === "F10") { ev.preventDefault(); commitVoice("narration"); }
+    else if (ev.key === "Escape") { ev.preventDefault(); clearVoiceBuffer(); }
   });
 
   // プロット
   for (const el of Object.keys(PLOT_FIELDS))
     $(el).addEventListener("input", onPlotInput);
+  $("struct-ksk").addEventListener("click", () => {
+    applyPlotStructure("kishotenketsu"); onPlotInput();
+  });
+  $("struct-jhk").addEventListener("click", () => {
+    applyPlotStructure("johakyu"); onPlotInput();
+  });
+  $("btn-fore-add").addEventListener("click", () => { addForeRow(); onPlotInput(); });
 
   // 登場人物
   $("btn-char-add").addEventListener("click", addChar);
   $("btn-char-save").addEventListener("click", saveChar);
+  $("btn-char-custom-add").addEventListener("click", () => addCustomRow());
   $("btn-char-del").addEventListener("click", () =>
     twoStep($("btn-char-del"), "⚠ もう一度で削除", () => {
       if (selCharId === null) { toast("削除するキャラクターを選択してください"); return; }
@@ -3236,6 +4006,8 @@ async function init() {
   $("btn-refs-del").addEventListener("click", () =>
     twoStep($("btn-refs-del"), "⚠ もう一度で削除", () => {
       if (selRefId === null) { toast("削除する資料を選択してください"); return; }
+      // 添付メタも一緒に削除（exe版のCASCADEと同じ）
+      state.tables.ref_files = state.tables.ref_files.filter(f => f.ref_id !== selRefId);
       delRow("refs", selRefId); selRefId = null;
       clearRefForm(); renderRefsList();
     }));
@@ -3298,9 +4070,11 @@ async function init() {
       : "⚠ 上書きすると現在の全データが失われます。必要なら先にエクスポートで控えを取ってください。";
   });
 
-  // Claude連携
-  $("btn-reader-claude").addEventListener("click", sendReaderToClaude);
-  $("btn-writer-claude").addEventListener("click", sendWriterToClaude);
+  // AI連携（送り先ごとにボタン）
+  for (const key of Object.keys(AI_PROVIDERS)) {
+    $("btn-reader-" + key).addEventListener("click", () => sendReaderToAi(key));
+    $("btn-writer-" + key).addEventListener("click", () => sendWriterToAi(key));
+  }
   $("claude-template").addEventListener("change", renderClaudeOptions);
   $("claude-regen").addEventListener("click", buildClaudePrompt);
   $("claude-copy").addEventListener("click", copyAndOpenClaude);

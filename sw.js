@@ -1,7 +1,10 @@
 /* yomikaki web Service Worker
    単一HTMLアプリなので、必要ファイルを全てキャッシュしてオフライン動作させる。
    データは IndexedDB にあるため SW はアプリ本体の配信のみを担当する。 */
-const CACHE = "yomikaki-web-v1";
+/* github.io は他の PWA と同じオリジンを共有している。キャッシュ名には必ず
+   この接頭辞を付け、消すときも自分の分だけ消すこと（他のアプリのキャッシュを消さない）。 */
+const CACHE_PREFIX = "yomikaki-web-";
+const CACHE = CACHE_PREFIX + "v2";
 const ASSETS = [
   "./",
   "./index.html",
@@ -14,7 +17,9 @@ self.addEventListener("install", event => {
   event.waitUntil(
     caches.open(CACHE)
       // アイコン等が無い環境でもインストールを失敗させない
-      .then(cache => Promise.allSettled(ASSETS.map(a => cache.add(a))))
+      // cache: "reload" でブラウザの HTTP キャッシュを通さず、必ず最新を取る
+      .then(cache => Promise.allSettled(
+        ASSETS.map(a => cache.add(new Request(a, { cache: "reload" })))))
       .then(() => self.skipWaiting())
   );
 });
@@ -22,7 +27,9 @@ self.addEventListener("install", event => {
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys
+        .filter(k => k.startsWith(CACHE_PREFIX) && k !== CACHE)   // 自分の古い版だけ
+        .map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });

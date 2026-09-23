@@ -1051,17 +1051,212 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
 
 /* ============================================================ データ層
    exe版のバックアップJSONと同一のテーブル構造で保持する。 */
-// exe版と揃える（v11=プロット序破急/伏線、v12=参考資料のフォルダ・添付）
-const SCHEMA_VERSION = 16;   // exe版の db.SCHEMA_VERSION と必ず揃える
+/* ==== BACKUP-CORE BEGIN ====
+   バックアップと表の整合にかかわる処理をここにまとめる。
+   **DOM に触れないこと**（yomikaki 側のテストが Node.js でこの範囲だけを
+   取り出して動かし、exe 版とのバックアップ往復を確かめている）。
+   表の定義は下の生成部分が正。Web 版にUIの無い表（ref_files・work_dictionary・
+   writing_* など）も TABLES に入れて、往復で消えないようにしている。 */
+/* <<< GENERATED: yomikaki schema >>>
+   自動生成。直接編集しないこと。
+   変更は yomikaki フォルダで python tools/gen_web_schema.py を実行すること。
+   元: yomikaki/db.py（SCHEMA_VERSION と DDL）/ yomikaki/backup.py（TABLES と文言） */
+const SCHEMA_VERSION = 17;
 const TABLES = [
-  "books", "bookmarks", "impressions", "quotes", "reading_schedule",
-  "works", "chapters", "manuscripts", "plots", "characters",
-  "timeline_events", "refs", "worldbuilding",
-  "relationships", "branch_nodes", "branch_edges",
-  // ref_files はexe版専用（添付PDF等のメタ）。Web版にUIは無いが、
-  // データを保持して往復で消えないよう TABLES に含める。
+  "books",
+  "bookmarks",
+  "impressions",
+  "quotes",
+  "reading_schedule",
+  "works",
+  "chapters",
+  "manuscripts",
+  "plots",
+  "characters",
+  "timeline_events",
+  "refs",
   "ref_files",
+  "worldbuilding",
+  "work_dictionary",
+  "relationships",
+  "branch_nodes",
+  "branch_edges",
+  "writing_schedule",
+  "writing_log",
 ];
+/* 表 → {列: 参照先の表}（マージ時の id 付け替え・削除の連鎖に使う） */
+const FK_MAP = {
+  bookmarks: { book_id: "books" },
+  impressions: { book_id: "books" },
+  quotes: { book_id: "books" },
+  reading_schedule: { book_id: "books" },
+  chapters: { work_id: "works" },
+  manuscripts: { work_id: "works", chapter_id: "chapters" },
+  plots: { work_id: "works" },
+  characters: { work_id: "works" },
+  timeline_events: { work_id: "works" },
+  refs: { work_id: "works" },
+  ref_files: { ref_id: "refs" },
+  worldbuilding: { work_id: "works" },
+  work_dictionary: { work_id: "works" },
+  relationships: { work_id: "works", char_a_id: "characters", char_b_id: "characters" },
+  branch_nodes: { work_id: "works" },
+  branch_edges: { work_id: "works", from_node_id: "branch_nodes", to_node_id: "branch_nodes" },
+  writing_schedule: { work_id: "works" },
+  writing_log: { work_id: "works" },
+};
+/* NOT NULL の外部キー（マージで解決できなければ行ごと除外する） */
+const REQUIRED_FK = {
+  bookmarks: ["book_id"],
+  impressions: ["book_id"],
+  quotes: ["book_id"],
+  reading_schedule: ["book_id"],
+  chapters: ["work_id"],
+  manuscripts: ["work_id"],
+  plots: ["work_id"],
+  characters: ["work_id"],
+  timeline_events: ["work_id"],
+  refs: ["work_id"],
+  ref_files: ["ref_id"],
+  worldbuilding: ["work_id"],
+  work_dictionary: ["work_id"],
+  relationships: ["work_id", "char_a_id", "char_b_id"],
+  branch_nodes: ["work_id"],
+  branch_edges: ["work_id", "from_node_id", "to_node_id"],
+  writing_schedule: ["work_id"],
+};
+/* 親を消したときの動作（exe 版の ON DELETE と同じ） */
+const ON_DELETE = {
+  bookmarks: { book_id: "CASCADE" },
+  impressions: { book_id: "CASCADE" },
+  quotes: { book_id: "CASCADE" },
+  reading_schedule: { book_id: "CASCADE" },
+  chapters: { work_id: "CASCADE" },
+  manuscripts: { work_id: "CASCADE", chapter_id: "CASCADE" },
+  plots: { work_id: "CASCADE" },
+  characters: { work_id: "CASCADE" },
+  timeline_events: { work_id: "CASCADE" },
+  refs: { work_id: "CASCADE" },
+  ref_files: { ref_id: "CASCADE" },
+  worldbuilding: { work_id: "CASCADE" },
+  work_dictionary: { work_id: "CASCADE" },
+  relationships: { work_id: "CASCADE", char_a_id: "CASCADE", char_b_id: "CASCADE" },
+  branch_nodes: { work_id: "CASCADE" },
+  branch_edges: { work_id: "CASCADE", from_node_id: "CASCADE", to_node_id: "CASCADE" },
+  writing_schedule: { work_id: "CASCADE" },
+  writing_log: { work_id: "SET NULL" },
+};
+const MSG_NOT_YOMIKAKI = "このファイルは yomikaki のバックアップではありません。";
+const MSG_NO_TABLES = "バックアップにテーブルデータが含まれていません。";
+const MSG_TOO_NEW = "バックアップ（v{backup}）はこのアプリ（v{app}）より新しいため読めません。アプリを更新してください。";
+const MSG_BAD_VERSION = "バックアップの版番号（schema_version）が読めません（{value}）。yomikaki が書き出したファイルか確認してください。";
+/* <<< END GENERATED: yomikaki schema >>> */
+
+function emptyTables() {
+  return Object.fromEntries(TABLES.map(t => [t, []]));
+}
+let state = { schema_version: SCHEMA_VERSION, tables: emptyTables() };
+
+function nextId(table) {
+  return state.tables[table].reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
+}
+
+/* 行を消し、外部キーをたどって子の行も消す（exe 版の ON DELETE と同じ動き）。
+   消す表を手で並べる方式は漏れが出た（ref_files・work_dictionary など）ので、
+   生成した FK_MAP / ON_DELETE をたどる。 */
+function deleteCascade(table, ids) {
+  const doomed = new Set(ids);
+  if (!doomed.size) return;
+  state.tables[table] = (state.tables[table] || []).filter(r => !doomed.has(r.id));
+  for (const child of TABLES) {
+    for (const [col, parent] of Object.entries(FK_MAP[child] || {})) {
+      if (parent !== table) continue;
+      const rows = (state.tables[child] || []).filter(r => doomed.has(r[col]));
+      if (!rows.length) continue;
+      const action = (ON_DELETE[child] || {})[col];
+      if (action === "CASCADE") {
+        deleteCascade(child, rows.map(r => r.id));
+      } else if (action === "SET NULL") {
+        for (const r of rows) r[col] = null;
+      }
+      /* それ以外（NO ACTION など）は exe 版では削除そのものが失敗する。ここでは触らない */
+    }
+  }
+}
+
+/* 版の判定（exe 版 backup.validate_backup と同じ順・同じ文言）。
+   読めるなら null、読めないなら利用者に見せる文を返す。 */
+function versionText(data) {
+  return Object.prototype.hasOwnProperty.call(data, "schema_version")
+    ? JSON.stringify(data.schema_version) : "なし";
+}
+function checkBackup(data, appVersion = SCHEMA_VERSION) {
+  if (!data || typeof data !== "object" || Array.isArray(data) ||
+      data.app !== "yomikaki") {
+    return MSG_NOT_YOMIKAKI;
+  }
+  const v = data.schema_version;
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 1) {
+    return MSG_BAD_VERSION.replace("{value}", versionText(data));
+  }
+  if (v > appVersion) {
+    return MSG_TOO_NEW.replace("{backup}", v).replace("{app}", appVersion);
+  }
+  if (!data.tables || typeof data.tables !== "object" || Array.isArray(data.tables)) {
+    return MSG_NO_TABLES;
+  }
+  return null;
+}
+
+/* 古い版のバックアップは、無い表を空にして読む（無い列は exe 版に戻したときに既定値で埋まる）。
+   上書きなら null、マージなら追加した件数を返す。 */
+function importIntoState(data, mode = "replace") {
+  if (mode === "merge") {
+    return mergeTables(Object.assign(emptyTables(), data.tables));
+  }
+  state = { schema_version: SCHEMA_VERSION,
+            tables: Object.assign(emptyTables(), data.tables) };
+  return null;
+}
+
+function mergeTables(incoming) {
+  const idMaps = {};   // table -> {oldId: newId}
+  let added = 0;
+  for (const table of TABLES) {
+    idMaps[table] = {};
+    const fks = FK_MAP[table] || {};
+    const required = REQUIRED_FK[table] || [];
+    for (const row of incoming[table] || []) {
+      const oldId = row.id;
+      const newRow = { ...row };
+      delete newRow.id;
+      let skip = false;
+      for (const [col, refTable] of Object.entries(fks)) {
+        const v = newRow[col];
+        if (v == null) continue;
+        const mapped = idMaps[refTable] ? idMaps[refTable][v] : undefined;
+        if (mapped === undefined) {
+          if (required.includes(col)) { skip = true; break; }
+          newRow[col] = null;
+        } else {
+          newRow[col] = mapped;
+        }
+      }
+      if (skip) continue;
+      newRow.id = nextId(table);
+      state.tables[table].push(newRow);
+      if (oldId != null) idMaps[table][oldId] = newRow.id;
+      added++;
+    }
+  }
+  return added;
+}
+
+function buildBackup(exportedAt) {
+  return { app: "yomikaki", schema_version: SCHEMA_VERSION,
+           exported_at: exportedAt, tables: state.tables };
+}
+/* ==== BACKUP-CORE END ==== */
 const NAROU_GENRES = [
   "異世界〔恋愛〕", "現実世界〔恋愛〕", "ハイファンタジー", "ローファンタジー",
   "純文学", "ヒューマンドラマ", "歴史", "推理", "ホラー", "アクション", "コメディー",
@@ -1074,10 +1269,6 @@ const KAKUYOMU_GENRES = [
   "歴史・時代・伝奇", "創作論・評論", "詩・童話・その他",
 ];
 
-function emptyTables() {
-  return Object.fromEntries(TABLES.map(t => [t, []]));
-}
-let state = { schema_version: SCHEMA_VERSION, tables: emptyTables() };
 let selectedBookId = null;
 let selImpId = null, selBmId = null, selQuoteId = null;
 let sortKey = "updated_at", sortDir = -1;
@@ -1086,9 +1277,6 @@ function now() {
   const d = new Date(), p = n => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ` +
          `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
-function nextId(table) {
-  return state.tables[table].reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
 }
 function findBook(id) {
   return state.tables.books.find(b => b.id === id) || null;
@@ -1243,10 +1431,7 @@ function upsertBook(data) {
   saveSoon();
 }
 function deleteBook(id) {
-  state.tables.books = state.tables.books.filter(b => b.id !== id);
-  for (const t of ["bookmarks", "impressions", "quotes", "reading_schedule"]) {
-    state.tables[t] = state.tables[t].filter(r => r.book_id !== id);
-  }
+  deleteCascade("books", [id]);     // 感想・しおり・引用・予定も外部キーをたどって消える
   saveSoon();
 }
 
@@ -1724,18 +1909,9 @@ function touchWork(workId) {
   if (w) w.updated_at = now();
 }
 function deleteWorkCascade(workId) {
-  const chIds = chaptersOf(workId).map(c => c.id);
-  const charIds = state.tables.characters
-    .filter(c => c.work_id === workId).map(c => c.id);
-  const nodeIds = state.tables.branch_nodes
-    .filter(n => n.work_id === workId).map(n => n.id);
-  for (const t of ["chapters", "manuscripts", "plots", "characters",
-                   "timeline_events", "refs", "worldbuilding",
-                   "relationships", "branch_nodes", "branch_edges"]) {
-    state.tables[t] = state.tables[t].filter(r => r.work_id !== workId);
-  }
-  void chIds; void charIds; void nodeIds;  // work_id で全て消えるため参照掃除は不要
-  state.tables.works = state.tables.works.filter(w => w.id !== workId);
+  /* 作品に紐づく行は、生成した外部キー情報をたどって漏れなく消す
+     （以前は消す表を手で並べていて、ref_files・work_dictionary などが残った） */
+  deleteCascade("works", [workId]);
   saveSoon();
 }
 /* 兄弟の並びを入れ替えて order_no を 1 から振り直す（exe版と同方式） */
@@ -3672,10 +3848,7 @@ function switchMode(mode) {
 
 /* ============================================================ バックアップ */
 function exportJson() {
-  const data = {
-    app: "yomikaki", schema_version: SCHEMA_VERSION,
-    exported_at: now(), tables: state.tables,
-  };
+  const data = buildBackup(now());
   const stamp = now().replace(/[- :]/g, "").slice(0, 14);
   const blob = new Blob([JSON.stringify(data, null, 2)],
                         { type: "application/json" });
@@ -3687,85 +3860,13 @@ function exportJson() {
   const total = TABLES.reduce((n, t) => n + state.tables[t].length, 0);
   toast(`全 ${total} 件をエクスポートしました（exe版でそのまま復元できます）`);
 }
-/* テーブルごとの外部キー定義（マージ時のID付け替え用。exe版 backup.py と同じ） */
-const FK_MAP = {
-  bookmarks: { book_id: "books" },
-  impressions: { book_id: "books" },
-  quotes: { book_id: "books" },
-  reading_schedule: { book_id: "books" },
-  chapters: { work_id: "works" },
-  manuscripts: { work_id: "works", chapter_id: "chapters" },
-  plots: { work_id: "works" },
-  characters: { work_id: "works" },
-  timeline_events: { work_id: "works" },
-  refs: { work_id: "works" },
-  ref_files: { ref_id: "refs" },
-  worldbuilding: { work_id: "works" },
-  relationships: { work_id: "works", char_a_id: "characters", char_b_id: "characters" },
-  branch_nodes: { work_id: "works" },
-  branch_edges: { work_id: "works", from_node_id: "branch_nodes", to_node_id: "branch_nodes" },
-};
-/* NOT NULL の外部キー（解決できない場合は行ごと除外する） */
-const REQUIRED_FK = {
-  bookmarks: ["book_id"], impressions: ["book_id"], quotes: ["book_id"],
-  reading_schedule: ["book_id"], chapters: ["work_id"], manuscripts: ["work_id"],
-  plots: ["work_id"], characters: ["work_id"], timeline_events: ["work_id"],
-  refs: ["work_id"], ref_files: ["ref_id"], worldbuilding: ["work_id"],
-  relationships: ["work_id", "char_a_id", "char_b_id"],
-  branch_nodes: ["work_id"],
-  branch_edges: ["work_id", "from_node_id", "to_node_id"],
-};
-
-function mergeTables(incoming) {
-  const idMaps = {};   // table -> {oldId: newId}
-  let added = 0;
-  for (const table of TABLES) {
-    idMaps[table] = {};
-    const fks = FK_MAP[table] || {};
-    const required = REQUIRED_FK[table] || [];
-    for (const row of incoming[table] || []) {
-      const oldId = row.id;
-      const newRow = { ...row };
-      delete newRow.id;
-      let skip = false;
-      for (const [col, refTable] of Object.entries(fks)) {
-        const v = newRow[col];
-        if (v == null) continue;
-        const mapped = idMaps[refTable] ? idMaps[refTable][v] : undefined;
-        if (mapped === undefined) {
-          if (required.includes(col)) { skip = true; break; }
-          newRow[col] = null;
-        } else {
-          newRow[col] = mapped;
-        }
-      }
-      if (skip) continue;
-      newRow.id = nextId(table);
-      state.tables[table].push(newRow);
-      if (oldId != null) idMaps[table][oldId] = newRow.id;
-      added++;
-    }
-  }
-  return added;
-}
-
 function runImport(text, mode = "replace") {
   let data;
   try { data = JSON.parse(text); }
   catch (e) { toast("⚠ JSONとして読み込めませんでした"); return false; }
-  if (!data || data.app !== "yomikaki" || !data.tables) {
-    toast("⚠ yomikaki のバックアップではありません"); return false;
-  }
-  if ((data.schema_version || 0) > SCHEMA_VERSION) {
-    toast(`⚠ バックアップ（v${data.schema_version}）が新しすぎます`); return false;
-  }
-  let addedCount = null;
-  if (mode === "merge") {
-    addedCount = mergeTables(Object.assign(emptyTables(), data.tables));
-  } else {
-    state = { schema_version: SCHEMA_VERSION,
-              tables: Object.assign(emptyTables(), data.tables) };
-  }
+  const problem = checkBackup(data);
+  if (problem) { toast("⚠ " + problem); return false; }
+  const addedCount = importIntoState(data, mode);
   saveSoon();
   window.__importAdded = addedCount;   // 完了メッセージ用
   selWorkId = null; selNode = null; currentMsId = null; msDirty = false;

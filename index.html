@@ -1061,7 +1061,7 @@ footer { text-align: center; color: var(--muted); font-size: 11px; padding: 8px;
    自動生成。直接編集しないこと。
    変更は yomikaki フォルダで python tools/gen_web_schema.py を実行すること。
    元: yomikaki/db.py（SCHEMA_VERSION と DDL）/ yomikaki/backup.py（TABLES と文言） */
-const SCHEMA_VERSION = 17;
+const SCHEMA_VERSION = 18;
 const TABLES = [
   "books",
   "bookmarks",
@@ -1083,6 +1083,7 @@ const TABLES = [
   "branch_edges",
   "writing_schedule",
   "writing_log",
+  "mindmaps",
 ];
 /* 表 → {列: 参照先の表}（マージ時の id 付け替え・削除の連鎖に使う） */
 const FK_MAP = {
@@ -1104,6 +1105,7 @@ const FK_MAP = {
   branch_edges: { work_id: "works", from_node_id: "branch_nodes", to_node_id: "branch_nodes" },
   writing_schedule: { work_id: "works" },
   writing_log: { work_id: "works" },
+  mindmaps: { work_id: "works" },
 };
 /* NOT NULL の外部キー（マージで解決できなければ行ごと除外する） */
 const REQUIRED_FK = {
@@ -1124,6 +1126,7 @@ const REQUIRED_FK = {
   branch_nodes: ["work_id"],
   branch_edges: ["work_id", "from_node_id", "to_node_id"],
   writing_schedule: ["work_id"],
+  mindmaps: ["work_id"],
 };
 /* 親を消したときの動作（exe 版の ON DELETE と同じ） */
 const ON_DELETE = {
@@ -1145,6 +1148,7 @@ const ON_DELETE = {
   branch_edges: { work_id: "CASCADE", from_node_id: "CASCADE", to_node_id: "CASCADE" },
   writing_schedule: { work_id: "CASCADE" },
   writing_log: { work_id: "SET NULL" },
+  mindmaps: { work_id: "CASCADE" },
 };
 const MSG_NOT_YOMIKAKI = "このファイルは yomikaki のバックアップではありません。";
 const MSG_NO_TABLES = "バックアップにテーブルデータが含まれていません。";
